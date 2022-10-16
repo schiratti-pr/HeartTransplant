@@ -1,0 +1,25 @@
+data:
+  batch_size_per_gpu: 2
+  dataloader_workers_per_gpu: 4
+  target_size: [ 256, 256, 256 ]
+  num_classes: 1
+
+logging:
+  root_path: 'logs'
+  name: 'UNet'
+  train_logs_steps: 500
+
+model:
+  name: 'UNet'
+
+train:
+  epochs: 150
+  grad_clip: 10.0
+  precision: 32
+  lr: 1.0e-4
+  scheduler_gamma: 0.999994
+  loss:
+    name: 'DiceLoss'
+
+  aug:
+    name: 'basic'
