@@ -2,19 +2,21 @@ import os
 import argparse
 from datetime import datetime
 from omegaconf import OmegaConf
+import collections
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.lr_monitor import LearningRateMonitor
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from data.dataloader import NLSTDataModule
+from data.dataloader import NLST_2D_DataModule
 from models import NLSTTrainingModule
+from utils.create_2d_data import data_to_slices
 
 
 def main():
     parser = argparse.ArgumentParser(description='Processing configuration for training')
-    parser.add_argument('--config', type=str, help='path to config file', default='configs/config.yaml')
+    parser.add_argument('--config', type=str, help='path to config file', default='configs/config_2d.yaml')
     args = parser.parse_args()
 
     pl.seed_everything(int(os.environ.get('LOCAL_RANK', 0)))
@@ -23,6 +25,9 @@ def main():
     config = OmegaConf.load(args.config)
 
     # TODO: add dictionary creation from files paths
+    # data_dict_train = None
+    # data_dict_val = None
+
     data_dict = {
         '/Users/mariadobko/Documents/Cornell/LAB/NLST First 60 Raw/NLST First 60 Raw - Part01 - 10Pats/100004/'
         '01-02-1999-NLST-LSS-63991/1.000000-0OPAGELSPLUSD4102.512080.00.10.75-24639':
@@ -37,11 +42,13 @@ def main():
         '01-02-1999-NLST-LSS-63991/1.000000-0OPAGELSPLUSD4102.512080.00.10.75-24639':
             '/Users/mariadobko/Downloads/Annotations - VT/100004.nii'
     }
-    data_dict_train = data_dict
-    data_dict_val = data_dict
+
+    data_dict = collections.OrderedDict(data_dict)
+    data_dict_train = data_to_slices(data_dict)
+    data_dict_val = data_to_slices(data_dict)
 
     # Init Lightning Data Module
-    dm = NLSTDataModule(
+    dm = NLST_2D_DataModule(
         data_dict_train=data_dict_train,
         data_dict_val=data_dict_val,
         batch_size=config['data']['batch_size_per_gpu'],
@@ -54,7 +61,8 @@ def main():
     model = NLSTTrainingModule(
         net=config['model']['name'],
         lr=config['train']['lr'],
-        loss=config['train']['loss']
+        loss=config['train']['loss'],
+        spatial_dims=2
     )
 
     # Set callbacks

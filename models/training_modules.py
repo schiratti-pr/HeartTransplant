@@ -19,13 +19,16 @@ class NLSTTrainingModule(LightningModule):
         pretrained_params: Optional[Sequence[str]] = None,
         lr: float = 1e-3,
         optimizer: Optional[Type[Optimizer]] = None,
-        loss: dict = None
+        loss: dict = None,
+        spatial_dims: int = 3
     ):
         super().__init__()
 
+        # TODO: edit 2D data
         if net == 'SegResNet':
             self.name = net
             net = SegResNet(
+                spatial_dims=spatial_dims,
                 blocks_down=[1, 2, 2, 4],
                 blocks_up=[1, 1, 1],
                 init_filters=16,
@@ -43,10 +46,11 @@ class NLSTTrainingModule(LightningModule):
                 attn_drop_rate=0.0,
                 dropout_path_rate=0.0,
                 use_checkpoint=True,
+                spatial_dims=spatial_dims
             )
         elif net == 'UNet':
             net = UNet(
-                spatial_dims=3,
+                spatial_dims=spatial_dims,
                 in_channels=1,
                 out_channels=1,
                 channels=(16, 32, 64, 128, 256),
@@ -54,7 +58,10 @@ class NLSTTrainingModule(LightningModule):
                 num_res_units=2,
             )
 
-        self.net = net.double()
+        if spatial_dims == 3:
+            self.net = net.double()
+        else:
+            self.net = net
 
         if loss.get('params'):
             self.loss = LOSSES[loss['name']](**loss['params'])

@@ -1,12 +1,12 @@
 data:
   batch_size_per_gpu: 2
   dataloader_workers_per_gpu: 4
-  target_size: [ 256, 256, 256 ]
+  target_size: [ 512, 512 ]
   num_classes: 1
 
 logging:
   root_path: 'logs'
-  name: 'UNet'
+  name: 'UNet-2D'
   train_logs_steps: 500
 
 model:
@@ -22,4 +22,4 @@ train:
     name: 'DiceLoss'
 
   aug:
-    name: 'basic3d'
+    name: 'basic2d'

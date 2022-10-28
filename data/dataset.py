@@ -16,6 +16,7 @@ from monai.transforms import (
     RandSpatialCrop,
     Resize,
     ScaleIntensity,
+    CenterSpatialCrop
 )
 
 
@@ -35,7 +36,28 @@ def pad_volume(vol, roi_size):
 
 
 def array_to_tensor(img_array) -> torch.FloatTensor:
-    return torch.FloatTensor(img_array / 255)
+    return torch.FloatTensor(img_array)
+
+
+def get_pixels_hu(scans):
+    image = np.stack([s.pixel_array for s in scans])
+    image = image.astype(np.int32)
+
+    # Set outside-of-scan pixels to 0
+    # The intercept is usually -1024, so air is approximately 0
+    image[image == -2000] = 0
+
+    # Convert to Hounsfield units (HU)
+    intercept = scans[0].RescaleIntercept
+    slope = scans[0].RescaleSlope
+
+    if slope != 1:
+        image = slope * image.astype(np.float64)
+        image = image.astype(np.int16)
+
+    image += np.int32(intercept)
+
+    return np.array(image, dtype=np.int16)
 
 
 class NLSTDataset(torch.utils.data.Dataset):
@@ -58,15 +80,21 @@ class NLSTDataset(torch.utils.data.Dataset):
         d = {sl_exam: int(sl_exam.split('/')[-1].split('-')[-1][:-4]) for sl_exam in slices_exam}
         sorted_dict = {k: v for k, v in sorted(d.items(), key=lambda item: item[1])}
 
-        slices = [dicom.dcmread(sl).pixel_array for sl in sorted_dict.keys()]
-        return np.stack(slices, -1)
+        slices = [dicom.dcmread(sl) for sl in sorted_dict.keys()]
+        # Hounsfield units
+        hu_slices = get_pixels_hu(slices)
+        return hu_slices
 
     def __getitem__(self, idx) -> dict[str, Any]:
         patient_dir, label_path = list(self.patients_paths.items())[idx]
         roi = self.load_sample(patient_dir)
 
         roi = array_to_tensor(roi)
-        mask = torch.DoubleTensor(nib.load(label_path).get_fdata())
+        label = nib.load(label_path).get_fdata()
+        label = np.flip(label, -1)
+        label = np.transpose(label, [1, 0, 2])
+
+        mask = torch.DoubleTensor(label)
 
         # Transform to 3D cube roi with same size for all dimensions
         seed = 1
@@ -74,7 +102,7 @@ class NLSTDataset(torch.utils.data.Dataset):
             [
                 ScaleIntensity(),
                 EnsureChannelFirst(),
-                RandSpatialCrop(self.target_size, random_size=False),
+                RandSpatialCrop(self.target_size, random_size=False), # todo: limit the random crop
             ]
         )
         imtrans.set_random_state(seed=seed)
@@ -96,12 +124,100 @@ class NLSTDataset(torch.utils.data.Dataset):
         return {'data': roi, 'label': mask}
 
 
+class NLST_2D_Dataset(torch.utils.data.Dataset):
+    """
+    Dataset for loading cardiac CTs
+    Loads slices - 2D images
+    """
+
+    def __init__(self, patients_paths, target_size=None, transform=None):
+        self.patients_paths = patients_paths
+        self.target_size = target_size
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.patients_paths)
+
+    @staticmethod
+    def load_slice(exam_path, slice_id):
+        slices_exam = glob.glob(exam_path + '/**')
+        slice_path = [sl_path for sl_path in slices_exam if str(slice_id) + '.dcm' in sl_path][0]
+        slice = dicom.dcmread(slice_path)
+
+        image = slice.pixel_array
+        image = image.astype(np.int16)
+        image[image == -2000] = 0
+
+        # Convert to Hounsfield units (HU)
+        intercept = slice.RescaleIntercept
+        slope = slice.RescaleSlope
+
+        if slope != 1:
+            image = slope * image.astype(np.float64)
+            image = image.astype(np.int32)
+        image += np.int32(intercept)
+
+        return image
+
+    def __getitem__(self, idx) -> dict[str, Any]:
+        patient_dir, label_path, slice_id = self.patients_paths[idx]
+        roi = self.load_slice(patient_dir, slice_id)
+        roi = array_to_tensor(roi)
+
+        label = nib.load(label_path).get_fdata()
+        label = np.flip(label, -1)
+        label = label[:, :, slice_id].T
+
+        mask = torch.DoubleTensor(label)
+
+        # Transform to 3D cube roi with same size for all dimensions
+        seed = 1
+        imtrans = Compose(
+            [
+                ScaleIntensity(),
+                EnsureChannelFirst(),
+                CenterSpatialCrop(self.target_size),   # todo: change to a limited random crop
+            ]
+        )
+        imtrans.set_random_state(seed=seed)
+
+        segtrans = Compose(
+            [
+                EnsureChannelFirst(),
+                CenterSpatialCrop(self.target_size),
+            ]
+        )
+        segtrans.set_random_state(seed=seed)
+
+        roi = imtrans(roi)
+        mask = segtrans(mask)
+
+        return {'data': roi, 'label': mask}
+
+
+def data_to_slices(data):
+    patient_slices_dict = []
+
+    for patient_path, label_path in data.items():
+        annotation = nib.load(label_path).get_fdata()
+
+        # Transpose and flip order because of nii format
+        annotation = np.flip(annotation, -1)
+        annotation = np.transpose(annotation, [1, 0, 2])
+
+        for slice_ in range(annotation.shape[-1]):
+            if np.sum(annotation[:, :, slice_]) > 0:
+                patient_slices_dict.append((patient_path, label_path, annotation.shape[-1] -slice_-1))
+
+    return patient_slices_dict
+
+
 if __name__ == '__main__':
     # Dictionary with directories to files in the format: {patient_dir} : {label_path}
     data_dict = {
-        '/Users/mariadobko/Documents/Cornell/LAB/NLST First 60 Raw/NLST First 60 Raw - Part01 - 10Pats/100004/'
-        '01-02-1999-NLST-LSS-63991/1.000000-0OPAGELSPLUSD4102.512080.00.10.75-24639':
-            '/Users/mariadobko/Documents/Segmentation-Segment_1-label.nii'
+        '/Users/mariadobko/Documents/Cornell/Lab/NLST First 60 Raw/NLST First 60 Raw - Part01 - 10Pats/100005/'
+        '01-02-1999-NLST-LSS-72969/2.000000-0OPAGELS16B3702.514060.00.11.375-43455':
+            '/Users/mariadobko/Downloads/100005-label.nii'
     }
 
     data_dict = collections.OrderedDict(data_dict)
@@ -111,4 +227,14 @@ if __name__ == '__main__':
         target_size=[256, 256, 256],
     )
     test_roi, test_mask = ds[0]['data'], ds[0]['label']
-    print(test_roi.shape, test_mask.shape)
+    print('3D dataset', test_roi.shape, test_mask.shape)
+
+    # For 2D images
+    data_dict_2d = data_to_slices(data_dict)
+    ds2d = NLST_2D_Dataset(
+        patients_paths=data_dict_2d,
+        target_size=[256, 256],
+    )
+    test_roi_slice, test_mask_slice = ds2d[0]['data'], ds2d[0]['label']
+    print('2D dataset', test_roi_slice.shape, test_mask_slice.shape)
+
