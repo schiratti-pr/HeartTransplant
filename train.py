@@ -1,7 +1,9 @@
 import os
+import glob
 import argparse
 from datetime import datetime
 from omegaconf import OmegaConf
+from sklearn.model_selection import train_test_split
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -22,28 +24,28 @@ def main():
     # Load configuration file
     config = OmegaConf.load(args.config)
 
-    # TODO: add dictionary creation from files paths
-    data_dict = {
-        '/Users/mariadobko/Documents/Cornell/LAB/NLST First 60 Raw/NLST First 60 Raw - Part01 - 10Pats/100004/'
-        '01-02-1999-NLST-LSS-63991/1.000000-0OPAGELSPLUSD4102.512080.00.10.75-24639':
-            '/Users/mariadobko/Downloads/Annotations - VT/100004.nii',
-        '/Users/mariadobko/Documents/Cornell/LAB/NLST First 60 Raw/NLST First 60 Raw - Part01 - 10Pats/100004/'
-        '01-02-1999-NLST-LSS-63991/1.000000-0OPAGELSPLUSD4102.512080.00.10.75-24639':
-            '/Users/mariadobko/Downloads/Annotations - VT/100004.nii',
-        '/Users/mariadobko/Documents/Cornell/LAB/NLST First 60 Raw/NLST First 60 Raw - Part01 - 10Pats/100004/'
-        '01-02-1999-NLST-LSS-63991/1.000000-0OPAGELSPLUSD4102.512080.00.10.75-24639':
-            '/Users/mariadobko/Downloads/Annotations - VT/100004.nii',
-        '/Users/mariadobko/Documents/Cornell/LAB/NLST First 60 Raw/NLST First 60 Raw - Part01 - 10Pats/100004/'
-        '01-02-1999-NLST-LSS-63991/1.000000-0OPAGELSPLUSD4102.512080.00.10.75-24639':
-            '/Users/mariadobko/Downloads/Annotations - VT/100004.nii'
-    }
-    data_dict_train = data_dict
-    data_dict_val = data_dict
+    raw_directory = '/Users/mariadobko/Documents/Cornell/LAB/NLST_nifti/'
+    annotations_dir = '/Users/mariadobko/Downloads/Annotations - VT 2/'
+    data_dict = {}
+    for raw_sample in glob.glob(raw_directory + '**'):
+        sample_id = raw_sample.split('/')[-1][:-4]
+        for label_path in glob.glob(annotations_dir + '**'):
+            if sample_id in label_path and '.nii' in label_path:
+                data_dict.update({raw_sample:label_path})
+
+    # Data split
+    train_set, testing_sets, _, _ = train_test_split(list(data_dict.keys()), list(data_dict.keys()), test_size=0.3,
+                                                        random_state=42)
+    val_set, test_set, _, _ = train_test_split(testing_sets, testing_sets, test_size=0.5, random_state=42)
+    data_dict_train = dict((k, data_dict[k]) for k in train_set)
+    data_dict_val = dict((k, data_dict[k]) for k in val_set)
+    print('Train:', len(data_dict_train), 'Val:', len(data_dict_val))
 
     # Init Lightning Data Module
     dm = NLSTDataModule(
         data_dict_train=data_dict_train,
         data_dict_val=data_dict_val,
+        nii_format=True,
         batch_size=config['data']['batch_size_per_gpu'],
         num_workers=config['data']['dataloader_workers_per_gpu'],
         target_size=config['data']['target_size'],

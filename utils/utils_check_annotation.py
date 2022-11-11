@@ -41,6 +41,11 @@ if __name__ == '__main__':
     missing_labels = check_annotation_quality(path_annotation)
     print('In this volume the following slices are missing annotations : {}'.format(missing_labels))
 
-    dir_annotations = '/Users/mariadobko/Downloads/Annotations - VT/'
+    dir_annotations = '/Users/mariadobko/Downloads/Annotations - VT 2/'
     result = check_annotation_directory(dir_annotations)
-    print(result)
+
+    for k in result.keys():
+        if result[k] is None:
+            pass
+        else:
+            print('Some slices missed', result[k])

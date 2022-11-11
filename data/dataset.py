@@ -56,8 +56,56 @@ def get_pixels_hu(scans):
         image = image.astype(np.int16)
 
     image += np.int32(intercept)
-
+    # 1000 = 1  > 500, hist 
     return np.array(image, dtype=np.int16)
+
+
+class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
+    def __init__(self, patients_paths, target_size=None, transform=None):
+        self.patients_paths = patients_paths
+        self.target_size = tuple(target_size)
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.patients_paths)
+
+    def __getitem__(self, idx) -> dict[str, Any]:
+        patient_path, label_path = list(self.patients_paths.items())[idx]
+        roi = nib.load(patient_path).get_fdata()
+
+        roi = array_to_tensor(roi)
+        label = nib.load(label_path).get_fdata()
+        label = np.flip(label, -1)
+        label = np.transpose(label, [1, 0, 2])
+
+        mask = torch.DoubleTensor(label)
+
+        # Transform to 3D cube roi with same size for all dimensions
+        seed = 1
+        imtrans = Compose(
+            [
+                ScaleIntensity(),
+                EnsureChannelFirst(),
+                RandSpatialCrop(self.target_size, random_size=False),  # todo: limit the random crop
+            ]
+        )
+        imtrans.set_random_state(seed=seed)
+
+        segtrans = Compose(
+            [
+                EnsureChannelFirst(),
+                RandSpatialCrop(self.target_size, random_size=False),
+            ]
+        )
+        segtrans.set_random_state(seed=seed)
+
+        roi = imtrans(roi)
+        mask = segtrans(mask)
+
+        # Pad depth dimension
+        roi, mask = pad_volume(roi, self.target_size[0]), pad_volume(mask, self.target_size[0])
+
+        return {'data': roi, 'label': mask}
 
 
 class NLSTDataset(torch.utils.data.Dataset):
@@ -120,6 +168,58 @@ class NLSTDataset(torch.utils.data.Dataset):
 
         # Pad depth dimension
         roi, mask = pad_volume(roi,  self.target_size[0]), pad_volume(mask, self.target_size[0])
+
+        return {'data': roi, 'label': mask}
+
+
+class NLST_2D_NIFTI_Dataset(torch.utils.data.Dataset):
+
+    def __init__(self, patients_paths, target_size=None, transform=None):
+        self.patients_paths = patients_paths
+        self.target_size = target_size
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.patients_paths)
+
+    @staticmethod
+    def load_slice(exam_path, slice_id):
+        image = nib.load(exam_path).get_fdata()[:, :, slice_id]
+
+        return image
+
+    def __getitem__(self, idx) -> dict[str, Any]:
+        patient_dir, label_path, slice_id = self.patients_paths[idx]
+        roi = self.load_slice(patient_dir, slice_id)
+        roi = array_to_tensor(roi)
+
+        label = nib.load(label_path).get_fdata()
+        label = np.flip(label, -1)
+        label = label[:, :, slice_id].T
+
+        mask = torch.DoubleTensor(label)
+
+        # Transform to 3D cube roi with same size for all dimensions
+        seed = 1
+        imtrans = Compose(
+            [
+                ScaleIntensity(),
+                EnsureChannelFirst(),
+                CenterSpatialCrop(self.target_size),   # todo: change to a limited random crop
+            ]
+        )
+        imtrans.set_random_state(seed=seed)
+
+        segtrans = Compose(
+            [
+                EnsureChannelFirst(),
+                CenterSpatialCrop(self.target_size),
+            ]
+        )
+        segtrans.set_random_state(seed=seed)
+
+        roi = imtrans(roi)
+        mask = segtrans(mask)
 
         return {'data': roi, 'label': mask}
 
@@ -195,6 +295,81 @@ class NLST_2D_Dataset(torch.utils.data.Dataset):
         return {'data': roi, 'label': mask}
 
 
+class NLST_2_5D_Dataset(torch.utils.data.Dataset):
+    """
+    Dataset for loading cardiac CTs
+    Loads slices - 2.5D images
+    """
+
+    def __init__(self, patients_paths, window_step, target_size=None, transform=None):
+        self.patients_paths = patients_paths
+        self.target_size = target_size
+        self.transform = transform
+        self.window_step = window_step
+
+    def __len__(self):
+        return len(self.patients_paths)
+
+    def load_slices(self, exam_path, slice_id):
+        slices_exam = glob.glob(exam_path + '/**')
+        selected_slices = list(range(slice_id-self.window_step, slice_id+self.window_step + 1))
+
+        stacked_channels = []
+        for selected in selected_slices:
+            slice_path = [sl_path for sl_path in slices_exam if str(selected) + '.dcm' in sl_path][0]
+            slice = dicom.dcmread(slice_path)
+
+            image = slice.pixel_array
+            image = image.astype(np.int16)
+            image[image == -2000] = 0
+
+            # Convert to Hounsfield units (HU)
+            intercept = slice.RescaleIntercept
+            slope = slice.RescaleSlope
+
+            if slope != 1:
+                image = slope * image.astype(np.float64)
+                image = image.astype(np.int32)
+            image += np.int32(intercept)
+            stacked_channels.append(np.expand_dims(image, 0))
+
+        return np.concatenate(stacked_channels, axis=0)
+
+    def __getitem__(self, idx) -> dict[str, Any]:
+        patient_dir, label_path, center_slice_id = self.patients_paths[idx]
+        roi = self.load_slices(patient_dir, center_slice_id)
+        roi = array_to_tensor(roi)
+
+        label = nib.load(label_path).get_fdata()
+        label = np.flip(label, -1)
+        label = label[:, :, center_slice_id].T
+
+        mask = torch.DoubleTensor(label)
+
+        # Transform to 3D cube roi with same size for all dimensions
+        seed = 1
+        imtrans = Compose(
+            [
+                ScaleIntensity(),
+                CenterSpatialCrop(self.target_size),   # todo: change to a limited random crop
+            ]
+        )
+        imtrans.set_random_state(seed=seed)
+
+        segtrans = Compose(
+            [
+                EnsureChannelFirst(),
+                CenterSpatialCrop(self.target_size),
+            ]
+        )
+        segtrans.set_random_state(seed=seed)
+
+        roi = imtrans(roi)
+        mask = segtrans(mask)
+
+        return {'data': roi, 'label': mask}
+
+
 def data_to_slices(data):
     patient_slices_dict = []
 
@@ -237,4 +412,14 @@ if __name__ == '__main__':
     )
     test_roi_slice, test_mask_slice = ds2d[0]['data'], ds2d[0]['label']
     print('2D dataset', test_roi_slice.shape, test_mask_slice.shape)
+
+    # For 2.5D images
+    data_dict_2d = data_to_slices(data_dict)
+    ds2_5d = NLST_2_5D_Dataset(
+        patients_paths=data_dict_2d,
+        target_size=[256, 256],
+        window_step=3,
+    )
+    test_roi_slice, test_mask_slice = ds2_5d[0]['data'], ds2_5d[0]['label']
+    print('2.5-D dataset', test_roi_slice.shape, test_mask_slice.shape)
 

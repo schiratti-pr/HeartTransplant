@@ -20,11 +20,11 @@ class NLSTTrainingModule(LightningModule):
         lr: float = 1e-3,
         optimizer: Optional[Type[Optimizer]] = None,
         loss: dict = None,
-        spatial_dims: int = 3
+        spatial_dims: int = 3,
+        num_in_channels=1
     ):
         super().__init__()
 
-        # TODO: edit 2D data
         if net == 'SegResNet':
             self.name = net
             net = SegResNet(
@@ -32,14 +32,14 @@ class NLSTTrainingModule(LightningModule):
                 blocks_down=[1, 2, 2, 4],
                 blocks_up=[1, 1, 1],
                 init_filters=16,
-                in_channels=4,
+                in_channels=num_in_channels,
                 out_channels=3,
                 dropout_prob=0.2,
             )
         elif net == 'SwinUNETR':
             net = SwinUNETR(
                 img_size=256,
-                in_channels=4,
+                in_channels=num_in_channels,
                 out_channels=3,
                 feature_size=48,
                 drop_rate=0.0,
@@ -51,7 +51,7 @@ class NLSTTrainingModule(LightningModule):
         elif net == 'UNet':
             net = UNet(
                 spatial_dims=spatial_dims,
-                in_channels=1,
+                in_channels=num_in_channels,
                 out_channels=1,
                 channels=(16, 32, 64, 128, 256),
                 strides=(2, 2, 2, 2),
