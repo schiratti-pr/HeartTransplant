@@ -75,7 +75,7 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
 
         roi = array_to_tensor(roi)
         label = nib.load(label_path).get_fdata()
-        label = np.flip(label, -1)
+        label = np.flip(label, -1).copy()
         label = np.transpose(label, [1, 0, 2])
 
         mask = torch.DoubleTensor(label)
@@ -139,7 +139,7 @@ class NLSTDataset(torch.utils.data.Dataset):
 
         roi = array_to_tensor(roi)
         label = nib.load(label_path).get_fdata()
-        label = np.flip(label, -1)
+        label = np.flip(label, -1).copy()
         label = np.transpose(label, [1, 0, 2])
 
         mask = torch.DoubleTensor(label)
@@ -194,7 +194,7 @@ class NLST_2D_NIFTI_Dataset(torch.utils.data.Dataset):
         roi = array_to_tensor(roi)
 
         label = nib.load(label_path).get_fdata()
-        label = np.flip(label, -1)
+        label = np.flip(label, -1).copy()
         label = label[:, :, slice_id].T
 
         mask = torch.DoubleTensor(label)
@@ -265,7 +265,7 @@ class NLST_2D_Dataset(torch.utils.data.Dataset):
         roi = array_to_tensor(roi)
 
         label = nib.load(label_path).get_fdata()
-        label = np.flip(label, -1)
+        label = np.flip(label, -1).copy()
         label = label[:, :, slice_id].T
 
         mask = torch.DoubleTensor(label)
@@ -341,7 +341,7 @@ class NLST_2_5D_Dataset(torch.utils.data.Dataset):
         roi = array_to_tensor(roi)
 
         label = nib.load(label_path).get_fdata()
-        label = np.flip(label, -1)
+        label = np.flip(label, -1).copy()
         label = label[:, :, center_slice_id].T
 
         mask = torch.DoubleTensor(label)
@@ -370,7 +370,7 @@ class NLST_2_5D_Dataset(torch.utils.data.Dataset):
         return {'data': roi, 'label': mask}
 
 
-def data_to_slices(data):
+def data_to_slices(data, nifti=False):
     patient_slices_dict = []
 
     for patient_path, label_path in data.items():
@@ -382,7 +382,10 @@ def data_to_slices(data):
 
         for slice_ in range(annotation.shape[-1]):
             if np.sum(annotation[:, :, slice_]) > 0:
-                patient_slices_dict.append((patient_path, label_path, annotation.shape[-1] -slice_-1))
+                if nifti:
+                    patient_slices_dict.append((patient_path, label_path, slice_))
+                else:
+                    patient_slices_dict.append((patient_path, label_path, annotation.shape[-1] -slice_-1))
 
     return patient_slices_dict
 

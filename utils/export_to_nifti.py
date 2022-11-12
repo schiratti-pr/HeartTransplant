@@ -18,7 +18,28 @@ def load_sample(exam_path):
     d = {sl_exam: int(sl_exam.split('/')[-1].split('-')[-1][:-4]) for sl_exam in slices_exam}
     sorted_dict = {k: v for k, v in sorted(d.items(), key=lambda item: item[1])}
     slices = [dicom.dcmread(sl).pixel_array for sl in sorted_dict.keys()]
-    return np.stack(slices, -1)
+
+    one_scan = dicom.dcmread(list(sorted_dict.keys())[0])
+    intercept = one_scan.RescaleIntercept
+    slope = one_scan.RescaleSlope
+
+    return np.stack(slices, -1), intercept, slope
+
+
+def covert_HU(image, intercept, slope):
+    # Set outside-of-scan pixels to 0
+    # The intercept is usually -1024, so air is approximately 0
+    image[image == -2000] = 0
+
+    # Convert to Hounsfield units (HU)
+    if slope != 1:
+        image = slope * image.astype(np.float64)
+        image = image.astype(np.int16)
+
+    image += np.int32(intercept)
+    # 1000 = 1  > 500, hist
+    return np.array(image, dtype=np.int16)
+
 
 
 if __name__ == '__main__':
@@ -72,7 +93,10 @@ if __name__ == '__main__':
             chosen_scan = scans[0]
 
             # Open the scans and save to NIFTI
-            array = np.array(load_sample(chosen_scan), dtype=np.float32)
+            sample, intercept, slope = load_sample(chosen_scan)
+            array = np.array(sample, dtype=np.float32)
+
+            array = covert_HU(array, intercept, slope)
 
             affine = np.eye(4)
             nifti_file = nib.Nifti1Image(array, affine)

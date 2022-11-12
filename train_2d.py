@@ -4,7 +4,7 @@ import argparse
 from datetime import datetime
 from omegaconf import OmegaConf
 import collections
-from sklearn.model_selection import train_test_split
+import pandas as pd
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -13,7 +13,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 
 from data.dataloader import NLST_2D_DataModule
 from models import NLSTTrainingModule
-from utils.create_2d_data import data_to_slices
+from data.dataset import data_to_slices
 
 
 def main():
@@ -27,7 +27,7 @@ def main():
     config = OmegaConf.load(args.config)
 
     raw_directory = '/Users/mariadobko/Documents/Cornell/LAB/NLST_nifti/'
-    annotations_dir = '/Users/mariadobko/Downloads/Annotations - VT 2/'
+    annotations_dir = '/Users/mariadobko/Downloads/Annotations - VT 3/'
     data_dict = {}
     for raw_sample in glob.glob(raw_directory + '**'):
         sample_id = raw_sample.split('/')[-1][:-4]
@@ -36,14 +36,22 @@ def main():
                 data_dict.update({raw_sample: label_path})
 
     # Data split
-    train_set, testing_sets, _, _ = train_test_split(list(data_dict.keys()), list(data_dict.keys()), test_size=0.3,
-                                                     random_state=42)
-    val_set, test_set, _, _ = train_test_split(testing_sets, testing_sets, test_size=0.5, random_state=42)
-    data_dict_train = dict((k, data_dict[k]) for k in train_set)
-    data_dict_val = dict((k, data_dict[k]) for k in val_set)
+    splits = pd.read_csv('/Users/mariadobko/Documents/Cornell/LAB/NLST-train_val_test-split.csv')
 
-    data_dict_train = data_to_slices(collections.OrderedDict(data_dict_train))
-    data_dict_val = data_to_slices(collections.OrderedDict(data_dict_val))
+    data_dict_train, data_dict_val = {}, {}
+    for index, row in splits.iterrows():
+        patient_id = row['id']
+        split = row['set']
+
+        for key in data_dict.keys():
+            if str(patient_id) in key and split == 'train':
+                data_dict_train.update({key: data_dict[key]})
+            if str(patient_id) in key and split == 'val':
+                data_dict_val.update({key: data_dict[key]})
+
+    data_dict_train = data_to_slices(collections.OrderedDict(data_dict_train), nifti=True)
+    data_dict_val = data_to_slices(collections.OrderedDict(data_dict_val), nifti=True)
+
     print('Train:', len(data_dict_train), 'Val:', len(data_dict_val))
 
     # Init Lightning Data Module

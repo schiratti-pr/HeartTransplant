@@ -3,7 +3,7 @@ import numpy as np
 import nibabel as nib
 
 
-def data_to_slices(data):
+def data_to_slices(data, nifti=False):
     patient_slices_dict = []
 
     for patient_path, label_path in data.items():
@@ -15,7 +15,10 @@ def data_to_slices(data):
 
         for slice_ in range(annotation.shape[-1]):
             if np.sum(annotation[:, :, slice_]) > 0:
-                patient_slices_dict.append((patient_path, label_path, annotation.shape[-1] -slice_-1))
+                if nifti:
+                    patient_slices_dict.append((patient_path, label_path, slice_))
+                else:
+                    patient_slices_dict.append((patient_path, label_path, annotation.shape[-1] -slice_-1))
 
     return patient_slices_dict
 
