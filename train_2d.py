@@ -108,7 +108,7 @@ def main():
     trainer = pl.Trainer(
         gpus=config.get('gpus'),
         max_epochs=config['train']['epochs'],
-        accelerator='cpu', #"cuda",
+        accelerator="cuda",
         gradient_clip_val=config['train'].get('grad_clip', 0),
         log_every_n_steps=config['logging']['train_logs_steps'],
         num_sanity_val_steps=0,

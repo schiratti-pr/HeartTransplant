@@ -1,3 +1,5 @@
+gpus: 0
+
 data:
   raw_directory: '/athena/sablab/scratch/mdo4009/NLST_nifti/'
   annotations_dir: '/athena/sablab/scratch/mdo4009/Annotations - VT/'
@@ -16,7 +18,7 @@ model:
   name: 'UNet'
 
 train:
-  epochs: 150
+  epochs: 50
   grad_clip: 10.0
   precision: 32
   lr: 1.0e-4

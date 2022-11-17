@@ -1,3 +1,5 @@
+gpus: 0
+
 data:
 #  raw_directory: '/Users/mariadobko/Documents/Cornell/LAB/NLST_nifti/'
 #  annotations_dir: '/Users/mariadobko/Downloads/Annotations - VT 3/'
