@@ -26,8 +26,9 @@ def main():
     # Load configuration file
     config = OmegaConf.load(args.config)
 
-    raw_directory = '/Users/mariadobko/Documents/Cornell/LAB/NLST_nifti/'
-    annotations_dir = '/Users/mariadobko/Downloads/Annotations - VT 3/'
+    raw_directory = config['data']['raw_directory']
+    annotations_dir = config['data']['annotations_dir']
+
     data_dict = {}
     for raw_sample in glob.glob(raw_directory + '**'):
         sample_id = raw_sample.split('/')[-1][:-4]
@@ -36,7 +37,7 @@ def main():
                 data_dict.update({raw_sample: label_path})
 
     # Data split
-    splits = pd.read_csv('/Users/mariadobko/Documents/Cornell/LAB/NLST-train_val_test-split.csv')
+    splits = pd.read_csv(config['data']['data_splits'])
 
     data_dict_train, data_dict_val = {}, {}
     for index, row in splits.iterrows():

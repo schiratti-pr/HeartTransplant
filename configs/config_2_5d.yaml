@@ -1,4 +1,7 @@
 data:
+  raw_directory: '/athena/sablab/scratch/mdo4009/NLST_nifti/'
+  annotations_dir: '/athena/sablab/scratch/mdo4009/Annotations - VT/'
+  data_splits: '/home/mdo4009/NLST-train_val_test-split.csv'
   batch_size_per_gpu: 2
   dataloader_workers_per_gpu: 4
   target_size: [ 512, 512 ]
