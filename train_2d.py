@@ -9,6 +9,7 @@ import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.lr_monitor import LearningRateMonitor
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from data.dataloader import NLST_2D_DataModule
@@ -44,21 +45,22 @@ def main():
         patient_id = row['id']
         split = row['set']
 
+        # subs = ['100082', '100081', '100080', '100082', '100088']  #100085
         for key in data_dict.keys():
-            if str(patient_id) in key and split == 'train':
+            if str(patient_id) in key and split == 'train': # and str(patient_id) in subs
                 data_dict_train.update({key: data_dict[key]})
-            if str(patient_id) in key and split == 'val':
+            if str(patient_id) in key and split == 'val': # and str(patient_id) == '100088'
                 data_dict_val.update({key: data_dict[key]})
 
-    data_dict_train = data_to_slices(collections.OrderedDict(data_dict_train), nifti=True)
-    data_dict_val = data_to_slices(collections.OrderedDict(data_dict_val), nifti=True)
+    data_train = data_to_slices(collections.OrderedDict(data_dict_train), nifti=True)
+    data_val = data_to_slices(collections.OrderedDict(data_dict_val), nifti=True)
 
-    print('Train:', len(data_dict_train), 'Val:', len(data_dict_val))
+    print('Train:', len(data_train), 'Val:', len(data_val))
 
     # Init Lightning Data Module
     dm = NLST_2D_DataModule(
-        data_dict_train=data_dict_train,
-        data_dict_val=data_dict_val,
+        data_dict_train=data_train,
+        data_dict_val=data_val,
         nii_format=True,
         batch_size=config['data']['batch_size_per_gpu'],
         num_workers=config['data']['dataloader_workers_per_gpu'],
@@ -71,7 +73,8 @@ def main():
         net=config['model']['name'],
         lr=config['train']['lr'],
         loss=config['train']['loss'],
-        spatial_dims=2
+        spatial_dims=2,
+        pretrained_weights=config['model'].get('pretrained_weights')
     )
 
     # Set callbacks
@@ -101,7 +104,8 @@ def main():
         auto_insert_metric_name=True
     )
     lr_monitor = LearningRateMonitor()
-    callbacks = [checkpoint_callback, lr_monitor]
+    # early_stop_callback = EarlyStopping(monitor="val_epoch/dice", min_delta=0.00, patience=10, verbose=False, mode="max")
+    callbacks = [checkpoint_callback, lr_monitor] #, early_stop_callback]
 
     tb_logger = TensorBoardLogger(config['logging']['root_path'], config['logging']['name'], version=experiment_name)
 

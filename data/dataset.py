@@ -371,7 +371,7 @@ class NLST_2_5D_Dataset(torch.utils.data.Dataset):
 
 
 def data_to_slices(data, nifti=False):
-    patient_slices_dict = []
+    patient_slices = []
 
     for patient_path, label_path in data.items():
         annotation = nib.load(label_path).get_fdata()
@@ -383,11 +383,11 @@ def data_to_slices(data, nifti=False):
         for slice_ in range(annotation.shape[-1]):
             if np.sum(annotation[:, :, slice_]) > 0:
                 if nifti:
-                    patient_slices_dict.append((patient_path, label_path, slice_))
+                    patient_slices.append((patient_path, label_path, slice_))
                 else:
-                    patient_slices_dict.append((patient_path, label_path, annotation.shape[-1] -slice_-1))
+                    patient_slices.append((patient_path, label_path, annotation.shape[-1] -slice_-1))
 
-    return patient_slices_dict
+    return patient_slices
 
 
 if __name__ == '__main__':

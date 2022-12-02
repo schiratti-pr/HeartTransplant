@@ -65,7 +65,8 @@ def main():
     model = NLSTTrainingModule(
         net=config['model']['name'],
         lr=config['train']['lr'],
-        loss=config['train']['loss']
+        loss=config['train']['loss'],
+        pretrained_weights=config['model'].get('pretrained_weights')
     )
 
     # Set callbacks

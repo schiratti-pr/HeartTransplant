@@ -15,13 +15,14 @@ data:
 logging:
   root_path: 'logs'
   name: 'UNet'
-  train_logs_steps: 500
+  train_logs_steps: 100
 
 model:
   name: 'UNet'
+#  pretrained_weights: ''
 
 train:
-  epochs: 150
+  epochs: 50
   grad_clip: 10.0
   precision: 32
   lr: 1.0e-4

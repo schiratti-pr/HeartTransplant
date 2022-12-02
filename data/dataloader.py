@@ -86,7 +86,7 @@ class NLST_2D_DataModule(BaseDataModule):
             self.train_dataset = NLST_2D_NIFTI_Dataset(
                 patients_paths=self.data_dict_train,
                 target_size=self.target_size,
-                transform=self.transform
+                transform=self.transform,
             )
             self.val_dataset = NLST_2D_NIFTI_Dataset(
                 patients_paths=self.data_dict_val,
