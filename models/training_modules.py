@@ -59,19 +59,18 @@ class NLSTTrainingModule(LightningModule):
                 blocks_up=[1, 1, 1],
                 init_filters=16,
                 in_channels=num_in_channels,
-                out_channels=3,
+                out_channels=1,
                 dropout_prob=0.2,
             )
         elif net == 'SwinUNETR':
             net = SwinUNETR(
-                img_size=256,
+                img_size=512,
                 in_channels=num_in_channels,
-                out_channels=3,
+                out_channels=1,
                 feature_size=48,
                 drop_rate=0.0,
                 attn_drop_rate=0.0,
                 dropout_path_rate=0.0,
-                use_checkpoint=True,
                 spatial_dims=spatial_dims
             )
         elif net == 'UNet':
@@ -83,7 +82,7 @@ class NLSTTrainingModule(LightningModule):
                 strides=(2, 2, 2, 2),
                 num_res_units=2,
             )
-
+        self.spatial_dims = spatial_dims
         if spatial_dims == 3:
             self.net = net.double()
         else:
@@ -152,7 +151,7 @@ class NLSTTrainingModule(LightningModule):
         self.log('Val/DiceCoeff', dice_coeff)
         self.log('Val/Loss', loss)
 
-        if batch_idx % 200:
+        if batch_idx % 200 and self.spatial_dims != 3:
             # Get tensorboard logger
             tb_logger = None
             for logger in self.trainer.loggers:

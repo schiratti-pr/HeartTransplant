@@ -78,7 +78,7 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
         label = np.flip(label, -1).copy()
         label = np.transpose(label, [1, 0, 2])
 
-        mask = torch.DoubleTensor(label)
+        mask = torch.Tensor(label)
 
         # Transform to 3D cube roi with same size for all dimensions
         seed = 1
@@ -86,7 +86,8 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
             [
                 ScaleIntensity(),
                 EnsureChannelFirst(),
-                RandSpatialCrop(self.target_size, random_size=False),  # todo: limit the random crop
+                Resize(self.target_size)
+                # CenterSpatialCrop(self.target_size),  # todo: limit the random crop
             ]
         )
         imtrans.set_random_state(seed=seed)
@@ -94,7 +95,8 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
         segtrans = Compose(
             [
                 EnsureChannelFirst(),
-                RandSpatialCrop(self.target_size, random_size=False),
+                Resize(self.target_size)
+                # CenterSpatialCrop(self.target_size),
             ]
         )
         segtrans.set_random_state(seed=seed)
@@ -103,7 +105,7 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
         mask = segtrans(mask)
 
         # Pad depth dimension
-        roi, mask = pad_volume(roi, self.target_size[0]), pad_volume(mask, self.target_size[0])
+        roi, mask = pad_volume(roi, self.target_size[0]).double(), pad_volume(mask, self.target_size[0]).double()
 
         return {'data': roi, 'label': mask}
 
