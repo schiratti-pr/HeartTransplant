@@ -45,11 +45,10 @@ def main():
         patient_id = row['id']
         split = row['set']
 
-        # subs = ['100082', '100081', '100080', '100082', '100088']  #100085
         for key in data_dict.keys():
-            if str(patient_id) in key and split == 'train': # and str(patient_id) in subs
+            if str(patient_id) in key and split == 'train':
                 data_dict_train.update({key: data_dict[key]})
-            if str(patient_id) in key and split == 'val': # and str(patient_id) == '100088'
+            if str(patient_id) in key and split == 'val':
                 data_dict_val.update({key: data_dict[key]})
 
     data_train = data_to_slices(collections.OrderedDict(data_dict_train), nifti=True)

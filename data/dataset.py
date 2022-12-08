@@ -105,7 +105,10 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
         mask = segtrans(mask)
 
         # Pad depth dimension
-        roi, mask = pad_volume(roi, self.target_size[0]).double(), pad_volume(mask, self.target_size[0]).double()
+        try:
+            roi, mask = pad_volume(roi, self.target_size[0]).double(), pad_volume(mask, self.target_size[0]).double()
+        except:
+            roi, mask = pad_volume(roi, self.target_size[0]), pad_volume(mask, self.target_size[0])
 
         return {'data': roi, 'label': mask}
 

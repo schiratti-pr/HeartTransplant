@@ -11,7 +11,7 @@ from pathlib import Path
 import pytorch_lightning as pl
 import torch
 
-from data.dataset import NLST_2D_NIFTI_Dataset
+from data.dataset import NLST_2D_NIFTI_Dataset, NLST_NIFTI_Dataset
 from data.dataset import data_to_slices
 from models.training_modules import binary_dice_coefficient
 from utils.utils import get_model
@@ -74,16 +74,23 @@ def main():
             if str(patient_id) in key and split == 'val':
                 data_dict_val.update({key: data_dict[key]})
 
-    data_val = data_to_slices(collections.OrderedDict(data_dict_val), nifti=True)
+    if len(config['data']['target_size']) == 2:
+        data_val = data_to_slices(collections.OrderedDict(data_dict_val), nifti=True)
 
-    val_dataset = NLST_2D_NIFTI_Dataset(
-        patients_paths=data_val,
-        target_size=config['data']['target_size'],
-        transform=None
-    )
+        val_dataset = NLST_2D_NIFTI_Dataset(
+            patients_paths=data_val,
+            target_size=config['data']['target_size'],
+            transform=None
+        )
+    else:
+        val_dataset = NLST_NIFTI_Dataset(
+            patients_paths=data_dict_val,
+            target_size=config['data']['target_size'],
+            transform=None
+        )
 
     # Init model
-    model = get_model(config['model']['name'])
+    model = get_model(config['model']['name'], spatial_dims=len(config['data']['target_size']))
 
     # Load weights
     all_checkpoints = [str(x) for x in sorted(Path(args.exp_path).iterdir(), key=os.path.getmtime) if '.ckpt' in str(x)]
