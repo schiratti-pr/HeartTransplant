@@ -48,8 +48,10 @@ class NLSTTrainingModule(LightningModule):
         spatial_dims: int = 3,
         num_in_channels=1,
         pretrained_weights=None,
+        log_images=False
     ):
         super().__init__()
+        self.log_images = log_images
 
         if net == 'SegResNet':
             self.name = net
@@ -151,7 +153,7 @@ class NLSTTrainingModule(LightningModule):
         self.log('Val/DiceCoeff', dice_coeff)
         self.log('Val/Loss', loss)
 
-        if batch_idx % 200 and self.spatial_dims != 3:
+        if batch_idx % 200 and self.spatial_dims != 3 and self.log_images:
             # Get tensorboard logger
             tb_logger = None
             for logger in self.trainer.loggers:

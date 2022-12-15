@@ -97,14 +97,14 @@ def main():
         dirpath=log_path,
         filename='{step:d}',
         every_n_epochs=1,
-        save_top_k=10,
+        save_top_k=3,
         mode='min',
         monitor='val_epoch/loss',
         auto_insert_metric_name=True
     )
     lr_monitor = LearningRateMonitor()
-    # early_stop_callback = EarlyStopping(monitor="val_epoch/dice", min_delta=0.00, patience=10, verbose=False, mode="max")
-    callbacks = [checkpoint_callback, lr_monitor] #, early_stop_callback]
+    early_stop_callback = EarlyStopping(monitor="val_epoch/loss", min_delta=0.0, patience=10, verbose=False, mode="min")
+    callbacks = [checkpoint_callback, lr_monitor, early_stop_callback]
 
     tb_logger = TensorBoardLogger(config['logging']['root_path'], config['logging']['name'], version=experiment_name)
 

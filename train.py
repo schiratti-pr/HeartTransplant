@@ -8,6 +8,7 @@ import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.lr_monitor import LearningRateMonitor
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from data.dataloader import NLSTDataModule
@@ -90,13 +91,14 @@ def main():
         dirpath=log_path,
         filename='{step:d}',
         every_n_epochs=1,
-        save_top_k=10,
+        save_top_k=3,
         mode='min',
         monitor='val_epoch/loss',
         auto_insert_metric_name=True
     )
     lr_monitor = LearningRateMonitor()
-    callbacks = [checkpoint_callback, lr_monitor]
+    early_stop_callback = EarlyStopping(monitor="val_epoch/loss", min_delta=0.0, patience=10, verbose=False, mode="min")
+    callbacks = [checkpoint_callback, lr_monitor, early_stop_callback]
 
     tb_logger = TensorBoardLogger(config['logging']['root_path'], config['logging']['name'], version=experiment_name)
 
