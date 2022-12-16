@@ -106,11 +106,16 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
 
         # Pad depth dimension
         try:
-            roi, mask = pad_volume(roi, self.target_size[0]).double(), pad_volume(mask, self.target_size[0]).double()
+            roi, mask = pad_volume(roi, self.target_size[0]).double(), pad_volume(mask, self.target_size[0])
         except:
             roi, mask = pad_volume(roi, self.target_size[0]), pad_volume(mask, self.target_size[0])
 
-        return {'data': roi, 'label': mask}
+        # Transformations / augmenting input
+        if self.transform:
+            aug = self.transform({'image': roi, 'label': mask})
+            roi, mask = aug['image'], aug['label']
+
+        return {'data': roi.double(), 'label': mask}
 
 
 class NLSTDataset(torch.utils.data.Dataset):
@@ -226,6 +231,11 @@ class NLST_2D_NIFTI_Dataset(torch.utils.data.Dataset):
         roi = imtrans(roi)
         mask = segtrans(mask)
 
+        # Transformations / augmenting input
+        if self.transform:
+            aug = self.transform({'image': roi, 'label': mask})
+            roi, mask = aug['image'], aug['label']
+
         return {'data': roi, 'label': mask}
 
 
@@ -297,7 +307,12 @@ class NLST_2D_Dataset(torch.utils.data.Dataset):
         roi = imtrans(roi)
         mask = segtrans(mask)
 
-        return {'data': roi, 'label': mask}
+        # Transformations / augmenting input
+        sample = {'data': roi, 'label': mask}
+        if self.transform:
+            sample = self.transform(sample)
+
+        return sample
 
 
 class NLST_2_5D_Dataset(torch.utils.data.Dataset):
