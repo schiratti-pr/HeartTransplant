@@ -61,10 +61,12 @@ def get_pixels_hu(scans):
 
 
 class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
-    def __init__(self, patients_paths, target_size=None, transform=None):
+    def __init__(self, patients_paths, target_size=None, transform=None, eval_mode=False, crop_heart=False):
         self.patients_paths = patients_paths
         self.target_size = tuple(target_size)
         self.transform = transform
+        self.evaluate_mode = eval_mode
+        self.crop_heart = crop_heart
 
     def __len__(self):
         return len(self.patients_paths)
@@ -79,6 +81,10 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
         label = np.transpose(label, [1, 0, 2])
 
         mask = torch.Tensor(label)
+
+        if self.crop_heart:
+            # Crop the region around the heart based on stats - [81:337, 158:430, :], adding padding of minimum 20
+            roi = roi[50:360, 140:450, :]
 
         # Transform to 3D cube roi with same size for all dimensions
         seed = 1
@@ -115,7 +121,10 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
             aug = self.transform({'image': roi, 'label': mask})
             roi, mask = aug['image'], aug['label']
 
-        return {'data': roi.double(), 'label': mask}
+        if self.evaluate_mode:
+            return {'data': roi, 'label': mask, 'patient_dir': patient_path}
+        else:
+            return {'data': roi.double(), 'label': mask}
 
 
 class NLSTDataset(torch.utils.data.Dataset):
@@ -184,10 +193,11 @@ class NLSTDataset(torch.utils.data.Dataset):
 
 class NLST_2D_NIFTI_Dataset(torch.utils.data.Dataset):
 
-    def __init__(self, patients_paths, target_size=None, transform=None):
+    def __init__(self, patients_paths, target_size=None, transform=None, eval_mode=False):
         self.patients_paths = patients_paths
         self.target_size = target_size
         self.transform = transform
+        self.evaluate_mode = eval_mode
 
     def __len__(self):
         return len(self.patients_paths)
@@ -236,7 +246,10 @@ class NLST_2D_NIFTI_Dataset(torch.utils.data.Dataset):
             aug = self.transform({'image': roi, 'label': mask})
             roi, mask = aug['image'], aug['label']
 
-        return {'data': roi, 'label': mask}
+        if self.evaluate_mode:
+            return {'data': roi, 'label': mask, 'patient_dir': patient_dir, 'slice_id': slice_id}
+        else:
+            return {'data': roi, 'label': mask}
 
 
 class NLST_2D_Dataset(torch.utils.data.Dataset):
@@ -320,58 +333,47 @@ class NLST_2_5D_Dataset(torch.utils.data.Dataset):
     Dataset for loading cardiac CTs
     Loads slices - 2.5D images
     """
-
-    def __init__(self, patients_paths, window_step, target_size=None, transform=None):
+    def __init__(self, patients_paths, target_size=None, transform=None, eval_mode=False, crop_heart=False,
+                 window_step=2):
         self.patients_paths = patients_paths
-        self.target_size = target_size
+        self.target_size = list(target_size)
         self.transform = transform
-        self.window_step = window_step
+        self.evaluate_mode = eval_mode
+        self.crop_heart = crop_heart
+        self.num_window_slices = window_step
 
     def __len__(self):
         return len(self.patients_paths)
 
-    def load_slices(self, exam_path, slice_id):
-        slices_exam = glob.glob(exam_path + '/**')
-        selected_slices = list(range(slice_id-self.window_step, slice_id+self.window_step + 1))
+    @staticmethod
+    def load_slices_2_5(exam_path, slice_id, window_step):
+        image = nib.load(exam_path).get_fdata()[:, :, slice_id - window_step : slice_id + window_step + 1]
 
-        stacked_channels = []
-        for selected in selected_slices:
-            slice_path = [sl_path for sl_path in slices_exam if str(selected) + '.dcm' in sl_path][0]
-            slice = dicom.dcmread(slice_path)
-
-            image = slice.pixel_array
-            image = image.astype(np.int16)
-            image[image == -2000] = 0
-
-            # Convert to Hounsfield units (HU)
-            intercept = slice.RescaleIntercept
-            slope = slice.RescaleSlope
-
-            if slope != 1:
-                image = slope * image.astype(np.float64)
-                image = image.astype(np.int32)
-            image += np.int32(intercept)
-            stacked_channels.append(np.expand_dims(image, 0))
-
-        return np.concatenate(stacked_channels, axis=0)
+        return image
 
     def __getitem__(self, idx) -> dict[str, Any]:
-        patient_dir, label_path, center_slice_id = self.patients_paths[idx]
-        roi = self.load_slices(patient_dir, center_slice_id)
+
+        patient_dir, label_path, slice_id = self.patients_paths[idx]
+        roi = self.load_slices_2_5(patient_dir, slice_id, self.num_window_slices)
         roi = array_to_tensor(roi)
 
         label = nib.load(label_path).get_fdata()
         label = np.flip(label, -1).copy()
-        label = label[:, :, center_slice_id].T
+        label = label[:, :, slice_id].T
 
         mask = torch.DoubleTensor(label)
+
+        if self.crop_heart:
+            # Crop the region around the heart based on stats - [81:337, 158:430, :], adding padding of minimum 20
+            roi = roi[50:360, 140:450, :]
 
         # Transform to 3D cube roi with same size for all dimensions
         seed = 1
         imtrans = Compose(
             [
                 ScaleIntensity(),
-                CenterSpatialCrop(self.target_size),   # todo: change to a limited random crop
+                EnsureChannelFirst(),
+                CenterSpatialCrop(self.target_size + [self.num_window_slices*2 + 1]),
             ]
         )
         imtrans.set_random_state(seed=seed)
@@ -384,10 +386,18 @@ class NLST_2_5D_Dataset(torch.utils.data.Dataset):
         )
         segtrans.set_random_state(seed=seed)
 
-        roi = imtrans(roi)
+        roi = imtrans(roi).squeeze().permute(2, 0, 1)
         mask = segtrans(mask)
 
-        return {'data': roi, 'label': mask}
+        # Transformations / augmenting input
+        if self.transform:
+            aug = self.transform({'image': roi, 'label': mask})
+            roi, mask = aug['image'], aug['label']
+
+        if self.evaluate_mode:
+            return {'data': roi, 'label': mask}
+        else:
+            return {'data': roi, 'label': mask}
 
 
 def data_to_slices(data, nifti=False):

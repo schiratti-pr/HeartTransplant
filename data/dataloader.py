@@ -38,12 +38,18 @@ class BaseDataModule(pl.LightningDataModule):
 
 class NLSTDataModule(BaseDataModule):
     def __init__(self, data_dict_train, data_dict_val, batch_size, num_workers, target_size, nii_format=True,
-                 transform: dict = None):
+                 transform: dict = None, crop_heart=False):
         super(NLSTDataModule, self).__init__(
             data_dict_train, data_dict_val, batch_size, num_workers, target_size,
         )
         self.target_size = target_size
-        self.transform = AUGMENTATIONS.get(transform['name'])
+        if transform is not None:
+            self.transform = AUGMENTATIONS.get(transform['name'])
+        else:
+            self.transform = None
+
+        self.crop_heart = crop_heart
+
         self.nii_format = nii_format
 
     def setup(self, stage) -> None:
@@ -51,12 +57,14 @@ class NLSTDataModule(BaseDataModule):
             self.train_dataset = NLST_NIFTI_Dataset(
                 patients_paths=self.data_dict_train,
                 target_size=self.target_size,
-                transform=self.transform
+                transform=self.transform,
+                crop_heart=self.crop_heart
             )
             self.val_dataset = NLST_NIFTI_Dataset(
                 patients_paths=self.data_dict_val,
                 target_size=self.target_size,
-                transform=None
+                transform=None,
+                crop_heart=self.crop_heart
             )
         else:
             self.train_dataset = NLSTDataset(
@@ -79,7 +87,10 @@ class NLST_2D_DataModule(BaseDataModule):
         )
         self.nii_format = nii_format
         self.target_size = target_size
-        self.transform = AUGMENTATIONS.get(transform['name'])
+        if transform is not None:
+            self.transform = AUGMENTATIONS.get(transform['name'])
+        else:
+            self.transform = None
 
     def setup(self, stage) -> None:
         if self.nii_format:
@@ -113,7 +124,10 @@ class NLST_2_5D_DataModule(BaseDataModule):
             data_dict_train, data_dict_val, batch_size, num_workers, target_size,
         )
         self.target_size = target_size
-        self.transform = AUGMENTATIONS.get(transform['name'])
+        if transform is not None:
+            self.transform = AUGMENTATIONS.get(transform['name'])
+        else:
+            self.transform = None
         self.window_step = window_step
 
     def setup(self, stage) -> None:

@@ -1,34 +1,31 @@
-gpus: 0
+gpus: [0]
 
 data:
-#  raw_directory: '/Users/mariadobko/Documents/Cornell/LAB/NLST_nifti/'
-#  annotations_dir: '/Users/mariadobko/Downloads/Annotations - VT 3/'
-#  data_splits: '/Users/mariadobko/Documents/Cornell/LAB/NLST-train_val_test-split.csv'
-  raw_directory: '/athena/sablab/scratch/mdo4009/NLST_nifti/'
+  raw_directory: '/athena/sablab/scratch/mdo4009/NLST_nifti_manual/'
   annotations_dir: '/athena/sablab/scratch/mdo4009/Annotations - VT/'
   data_splits: '/home/mdo4009/NLST-train_val_test-split.csv'
-  batch_size_per_gpu: 2
-  dataloader_workers_per_gpu: 4
-  target_size: [ 256, 256, 256 ]
+  batch_size_per_gpu: 1
+  dataloader_workers_per_gpu: 1
+  target_size: [ 128, 128, 128]
   num_classes: 1
+  crop_heart: True
 
 logging:
-  root_path: 'logs'
-  name: 'UNet'
+  root_path: 'logs_clean'
+  name: 'SegResNet-3D-128_heartcrop'
   train_logs_steps: 100
 
 model:
-  name: 'UNet'
+  name: 'SegResNet'
 #  pretrained_weights: ''
 
 train:
-  epochs: 50
+  epochs: 200
   grad_clip: 10.0
   precision: 32
   lr: 1.0e-4
-  scheduler_gamma: 0.999994
   loss:
-    name: 'DiceLoss'
+    name: 'BCEWithLogitsLoss'
 
-  aug:
-    name: 'basic3d'
+#  aug:
+#    name: 'basic3d'

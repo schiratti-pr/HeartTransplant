@@ -48,7 +48,7 @@ def main():
         for key in data_dict.keys():
             if str(patient_id) in key and split == 'train':
                 data_dict_train.update({key: data_dict[key]})
-            if str(patient_id) in key and split == 'val':
+            if str(patient_id) in key and split == 'val' and str(patient_id) != '100092':
                 data_dict_val.update({key: data_dict[key]})
 
     data_train = data_to_slices(collections.OrderedDict(data_dict_train), nifti=True)

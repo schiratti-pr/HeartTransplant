@@ -153,19 +153,20 @@ class NLSTTrainingModule(LightningModule):
         self.log('Val/DiceCoeff', dice_coeff)
         self.log('Val/Loss', loss)
 
-        if batch_idx % 200 and self.spatial_dims != 3 and self.log_images:
+        if batch_idx % 200:
             # Get tensorboard logger
             tb_logger = None
             for logger in self.trainer.loggers:
                 if isinstance(logger, TensorBoardLogger):
                     tb_logger = logger.experiment
                     break
-            viz_batch = (img, y, class_pred)
-            for img_idx, (image, y_true, y_pred) in enumerate(zip(*viz_batch)):
-                tb_logger.add_image(f"Image/{batch_idx}_{img_idx}", image, 0)
-                tb_logger.add_image(f"GroundTruth/{batch_idx}_{img_idx}", y_true, 0)
-                tb_logger.add_image(f"Prediction/{batch_idx}_{img_idx}", y_pred, 0)
-                break
+            if self.spatial_dims != 3 and self.log_images:
+                viz_batch = (img, y, class_pred)
+                for img_idx, (image, y_true, y_pred) in enumerate(zip(*viz_batch)):
+                    tb_logger.add_image(f"Image/{batch_idx}_{img_idx}", image, 0)
+                    tb_logger.add_image(f"GroundTruth/{batch_idx}_{img_idx}", y_true, 0)
+                    tb_logger.add_image(f"Prediction/{batch_idx}_{img_idx}", y_pred, 0)
+                    break
 
         return {'loss': loss, 'dice': dice_coeff}
 

@@ -1,22 +1,25 @@
 import os
+import glob
 import argparse
 from datetime import datetime
 from omegaconf import OmegaConf
 import collections
+import pandas as pd
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.lr_monitor import LearningRateMonitor
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from data.dataloader import NLST_2_5D_DataModule
 from models import NLSTTrainingModule
-from utils.create_2d_data import data_to_slices
+from data.dataset import data_to_slices
 
 
 def main():
     parser = argparse.ArgumentParser(description='Processing configuration for training')
-    parser.add_argument('--config', type=str, help='path to config file', default='configs/config_2d.yaml')
+    parser.add_argument('--config', type=str, help='path to config file', default='configs/config_2_5d.yaml')
     args = parser.parse_args()
 
     pl.seed_everything(int(os.environ.get('LOCAL_RANK', 0)))
@@ -24,48 +27,56 @@ def main():
     # Load configuration file
     config = OmegaConf.load(args.config)
 
-    # TODO: add dictionary creation from files paths
-    # data_dict_train = None
-    # data_dict_val = None
+    raw_directory = config['data']['raw_directory']
+    annotations_dir = config['data']['annotations_dir']
 
-    data_dict = {
-        '/Users/mariadobko/Documents/Cornell/LAB/NLST First 60 Raw/NLST First 60 Raw - Part01 - 10Pats/100004/'
-        '01-02-1999-NLST-LSS-63991/1.000000-0OPAGELSPLUSD4102.512080.00.10.75-24639':
-            '/Users/mariadobko/Downloads/Annotations - VT/100004.nii',
-        '/Users/mariadobko/Documents/Cornell/LAB/NLST First 60 Raw/NLST First 60 Raw - Part01 - 10Pats/100004/'
-        '01-02-1999-NLST-LSS-63991/1.000000-0OPAGELSPLUSD4102.512080.00.10.75-24639':
-            '/Users/mariadobko/Downloads/Annotations - VT/100004.nii',
-        '/Users/mariadobko/Documents/Cornell/LAB/NLST First 60 Raw/NLST First 60 Raw - Part01 - 10Pats/100004/'
-        '01-02-1999-NLST-LSS-63991/1.000000-0OPAGELSPLUSD4102.512080.00.10.75-24639':
-            '/Users/mariadobko/Downloads/Annotations - VT/100004.nii',
-        '/Users/mariadobko/Documents/Cornell/LAB/NLST First 60 Raw/NLST First 60 Raw - Part01 - 10Pats/100004/'
-        '01-02-1999-NLST-LSS-63991/1.000000-0OPAGELSPLUSD4102.512080.00.10.75-24639':
-            '/Users/mariadobko/Downloads/Annotations - VT/100004.nii'
-    }
+    data_dict = {}
+    for raw_sample in glob.glob(raw_directory + '**'):
+        sample_id = raw_sample.split('/')[-1][:-4]
+        for label_path in glob.glob(annotations_dir + '**'):
+            if sample_id in label_path and '.nii' in label_path:
+                data_dict.update({raw_sample: label_path})
 
-    data_dict = collections.OrderedDict(data_dict)
-    data_dict_train = data_to_slices(data_dict)
-    data_dict_val = data_to_slices(data_dict)
+    # Data split
+    splits = pd.read_csv(config['data']['data_splits'])
+
+    data_dict_train, data_dict_val = {}, {}
+    for index, row in splits.iterrows():
+        patient_id = row['id']
+        split = row['set']
+
+        for key in data_dict.keys():
+            if str(patient_id) in key and split == 'train':
+                data_dict_train.update({key: data_dict[key]})
+            if str(patient_id) in key and split == 'val' and str(patient_id) != '100092':
+                data_dict_val.update({key: data_dict[key]})
+
+    data_train = data_to_slices(collections.OrderedDict(data_dict_train), nifti=True)
+    data_val = data_to_slices(collections.OrderedDict(data_dict_val), nifti=True)
+
+    print('Train:', len(data_train), 'Val:', len(data_val))
 
     # Init Lightning Data Module
     dm = NLST_2_5D_DataModule(
-        data_dict_train=data_dict_train,
-        data_dict_val=data_dict_val,
+        data_dict_train=data_train,
+        data_dict_val=data_val,
         batch_size=config['data']['batch_size_per_gpu'],
         num_workers=config['data']['dataloader_workers_per_gpu'],
         target_size=config['data']['target_size'],
-        transform=config['train']['aug'],
-        window_step=config['data']['window_step'],
+        transform=config['train'].get('aug'),
+        window_step=config['data']['window_step']
     )
 
+    number_channels = config['data']['window_step'] * 2 + 1
+
     # Init model
-    num_channels = int(config['data']['window_step'])*2 + 1
     model = NLSTTrainingModule(
         net=config['model']['name'],
         lr=config['train']['lr'],
         loss=config['train']['loss'],
         spatial_dims=2,
-        num_in_channels= num_channels
+        num_in_channels=number_channels,
+        pretrained_weights=config['model'].get('pretrained_weights')
     )
 
     # Set callbacks
@@ -89,20 +100,21 @@ def main():
         dirpath=log_path,
         filename='{step:d}',
         every_n_epochs=1,
-        save_top_k=10,
+        save_top_k=3,
         mode='min',
         monitor='val_epoch/loss',
         auto_insert_metric_name=True
     )
     lr_monitor = LearningRateMonitor()
-    callbacks = [checkpoint_callback, lr_monitor]
+    early_stop_callback = EarlyStopping(monitor="val_epoch/loss", min_delta=0.0, patience=10, verbose=False, mode="min")
+    callbacks = [checkpoint_callback, lr_monitor, early_stop_callback]
 
     tb_logger = TensorBoardLogger(config['logging']['root_path'], config['logging']['name'], version=experiment_name)
 
     trainer = pl.Trainer(
         gpus=config.get('gpus'),
         max_epochs=config['train']['epochs'],
-        accelerator='cpu', #"cuda",
+        accelerator="cuda",
         gradient_clip_val=config['train'].get('grad_clip', 0),
         log_every_n_steps=config['logging']['train_logs_steps'],
         num_sanity_val_steps=0,

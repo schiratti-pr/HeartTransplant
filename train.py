@@ -46,7 +46,7 @@ def main():
         for key in data_dict.keys():
             if str(patient_id) in key and split == 'train':
                 data_dict_train.update({key: data_dict[key]})
-            if str(patient_id) in key and split == 'val':
+            if str(patient_id) in key and split == 'val' and str(patient_id) != '100092':
                 data_dict_val.update({key: data_dict[key]})
 
     print('Train:', len(data_dict_train), 'Val:', len(data_dict_val))
@@ -59,7 +59,8 @@ def main():
         batch_size=config['data']['batch_size_per_gpu'],
         num_workers=config['data']['dataloader_workers_per_gpu'],
         target_size=config['data']['target_size'],
-        transform=config['train']['aug'],
+        transform=config['train'].get('aug'),
+        crop_heart=config['data'].get('crop_heart')
     )
 
     # Init model

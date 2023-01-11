@@ -8,6 +8,9 @@ import numpy as np
 import tqdm
 from pathlib import Path
 import random
+import cv2
+import cc3d
+import copy
 
 
 import pytorch_lightning as pl
@@ -17,14 +20,56 @@ from monai.data import TestTimeAugmentation
 from monai.transforms import (Compose, RandAffined)
 
 
-from data.dataset import NLST_2D_NIFTI_Dataset, NLST_NIFTI_Dataset
+from data.dataset import NLST_2D_NIFTI_Dataset, NLST_NIFTI_Dataset, NLST_2_5D_Dataset
 from data.dataset import data_to_slices
 from models.training_modules import binary_dice_coefficient
 from utils.utils import get_model
+from skimage import measure
 
 
 from matplotlib.pyplot import figure, imshow, axis, savefig
 import matplotlib.pyplot as plt
+
+
+def mask_to_border(mask):
+    h, w = mask.shape
+    border = np.zeros((h, w))
+
+    contours = measure.find_contours(mask, 128)
+    for contour in contours:
+        for c in contour:
+            x = int(c[0])
+            y = int(c[1])
+            border[x][y] = 255
+
+    return border
+
+
+def mask_to_bbox(mask):
+    """ Mask to bounding boxes """
+    bboxes = []
+
+    mask = mask_to_border(mask)
+    lbl = measure.label(mask)
+    props = measure.regionprops(lbl)
+    areas = []
+    for prop in props:
+        x1 = prop.bbox[1]
+        y1 = prop.bbox[0]
+
+        x2 = prop.bbox[3]
+        y2 = prop.bbox[2]
+
+        bboxes.append([x1, y1, x2, y2])
+        areas.append((x2-x1) * (y2-y1))
+
+    indices = list(np.argsort(areas))
+
+    sorted_boxes = []
+    for i in indices:
+        sorted_boxes.append(bboxes[i])
+
+    return sorted_boxes
 
 
 def showImagesHorizontally(list_of_arrs):
@@ -46,6 +91,33 @@ def showImagesHorizontally(list_of_arrs):
     return fig
 
 
+def showPredictionContour(img, gt, pred, dice, patient_dir, slice_id):
+    img = np.stack((img,) * 3, axis=-1).copy()
+    patient = patient_dir.split('/')[-1]
+
+    pred = pred.astype('uint8')
+    contours_pred, _ = cv2.findContours(pred.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    gt[gt == 1] = 255
+    gt = gt.astype('uint8')
+    contours_gt, _ = cv2.findContours(gt.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    for c in contours_pred:
+        cv2.drawContours(img, [c], 0, (255, 0, 0), 3)
+    for c in contours_gt:
+        cv2.drawContours(img, [c], 0, (0, 255, 0), 3)
+
+    fig, ax = plt.subplots()
+    ax.imshow(img)
+    proxy = [plt.Rectangle((0, 0), 1, 1, fc='green'), plt.Rectangle((0, 0), 1, 1, fc='red')]
+    ax.set_title("Patient: {}, Slice: {}, \nDice score: {} %".format(patient, slice_id, round(dice.item()*100, 4)))
+    plt.legend(proxy, ["mask", "prediction"])
+    axis('off')
+    plt.tight_layout()
+
+    return fig
+
+
 def main():
     SEED = 0
     cudnn.benchmark = True
@@ -62,6 +134,8 @@ def main():
     parser.add_argument('--device', type=str, default='cuda:1')
     parser.add_argument('--data_split', type=str, default='val')
     parser.add_argument('--tta', type=bool, help='run with tta', default=False)
+    parser.add_argument('--result_save', type=str, help='path to folder', default='results')
+
     args = parser.parse_args()
 
     device = torch.device(args.device)
@@ -94,23 +168,37 @@ def main():
             if str(patient_id) in key and split == args.data_split:
                 data_dict_split.update({key: data_dict[key]})
 
-    if len(config['data']['target_size']) == 2:
+    if len(config['data']['target_size']) == 2 and config['data'].get('window_step') is None:
         data_split = data_to_slices(collections.OrderedDict(data_dict_split), nifti=True)
 
         dataset = NLST_2D_NIFTI_Dataset(
             patients_paths=data_split,
             target_size=config['data']['target_size'],
-            transform=None
+            transform=None,
+            eval_mode=True
         )
+        number_channels = 1
+    elif len(config['data']['target_size']) == 2:
+        data_split = data_to_slices(collections.OrderedDict(data_dict_split), nifti=True)
+        dataset = NLST_2_5D_Dataset(
+            patients_paths=data_split,
+            target_size=config['data']['target_size'],
+            transform=None,
+            window_step=config['data'].get('window_step'),
+        )
+        number_channels = config['data']['window_step'] * 2 + 1
     else:
         dataset = NLST_NIFTI_Dataset(
             patients_paths=data_dict_split,
             target_size=config['data']['target_size'],
-            transform=None
+            transform=None,
+            crop_heart=config['data'].get('crop_heart')
         )
+        number_channels = 1
 
     # Init model
-    model = get_model(config['model']['name'], spatial_dims=len(config['data']['target_size']))
+    model = get_model(config['model']['name'], spatial_dims=len(config['data']['target_size']),
+                                                                num_in_channels=number_channels)
     model.to(device)
 
     # Load weights
@@ -154,12 +242,33 @@ def main():
             sigmoid_pred = torch.sigmoid(prediction)
             class_pred = torch.round(sigmoid_pred).cpu()
 
+        # CCA
+        connectivity = 6  # only 4,8 (2D) and 26, 18, and 6 (3D) are allowed
+        labels_out, N = cc3d.connected_components(class_pred.numpy(), connectivity=connectivity, return_N=True)
+        dict_components = {}
+        for label, image in cc3d.each(labels_out, binary=False, in_place=True):
+            dict_components.update({np.count_nonzero(image): copy.deepcopy(image)})
+        try:
+            class_pred = dict_components[max(dict_components.keys())]
+            class_pred = torch.Tensor(class_pred.astype(np.float32))
+        except:
+            pass
+
         dice_coeff = binary_dice_coefficient(class_pred, mask)
         dice_scores.append(dice_coeff)
 
         if args.save_fig:
-            f = showImagesHorizontally([img.squeeze().numpy(), mask.numpy(), class_pred.numpy()])
-            savefig('result_{}.png'.format(vis_id), bbox_inches='tight')
+            if len(config['data']['target_size']) == 2:
+                showPredictionContour(img.squeeze().numpy(), mask.numpy(), class_pred.numpy(), dice_coeff,
+                               img_ex['patient_dir'], img_ex['slice_id'])
+
+                if not os.path.exists(args.result_save):
+                    os.makedirs(args.result_save)
+                savefig(args.result_save + '/{}_{}.png'.format(vis_id, round(dice_coeff.item()*100, 2)),
+                        bbox_inches='tight')
+            else:
+                # TODO: For 3d saving the entire prediction mask
+                pass
 
     print('Mean Dice on {} : {}'.format(args.data_split, np.mean(dice_scores)))
 
