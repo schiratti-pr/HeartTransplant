@@ -395,7 +395,7 @@ class NLST_2_5D_Dataset(torch.utils.data.Dataset):
             roi, mask = aug['image'], aug['label']
 
         if self.evaluate_mode:
-            return {'data': roi, 'label': mask}
+            return {'data': roi, 'label': mask, 'patient_dir': patient_dir, 'slice_id': slice_id}
         else:
             return {'data': roi, 'label': mask}
 

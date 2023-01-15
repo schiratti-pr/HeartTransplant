@@ -92,6 +92,9 @@ def showImagesHorizontally(list_of_arrs):
 
 
 def showPredictionContour(img, gt, pred, dice, patient_dir, slice_id):
+    if len(img.shape) != 2:
+        img = img[round(img.shape[0]/2), :, :]
+
     img = np.stack((img,) * 3, axis=-1).copy()
     patient = patient_dir.split('/')[-1]
 
@@ -185,6 +188,7 @@ def main():
             target_size=config['data']['target_size'],
             transform=None,
             window_step=config['data'].get('window_step'),
+            eval_mode=True
         )
         number_channels = config['data']['window_step'] * 2 + 1
     else:
