@@ -267,7 +267,10 @@ def main():
                 savefig(args.result_save + '/{}_{}.png'.format(vis_id, round(dice_coeff.item()*100, 2)),
                         bbox_inches='tight')
             else:
-                # TODO: For 3d saving the entire prediction mask
+                if not os.path.exists(args.result_save):
+                    os.makedirs(args.result_save)
+                    # TODO: For 3d saving the entire prediction mask
+
                 pass
 
     print('Mean Dice on {} : {}'.format(args.data_split, np.mean(dice_scores)))

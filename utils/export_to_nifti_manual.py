@@ -42,7 +42,6 @@ def covert_HU(image, intercept, slope):
     return np.array(image, dtype=np.int16)
 
 
-
 if __name__ == '__main__':
     input_dir = '/Users/mariadobko/Documents/Cornell/LAB/NLST First 60 Raw'
     save_dir = '/Users/mariadobko/Documents/Cornell/LAB/NLST_nifti_manual'

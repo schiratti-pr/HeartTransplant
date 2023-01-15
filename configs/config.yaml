@@ -27,5 +27,5 @@ train:
   loss:
     name: 'BCEWithLogitsLoss'
 
-#  aug:
-#    name: 'basic3d'
+  aug:
+    name: 'basic2d'
