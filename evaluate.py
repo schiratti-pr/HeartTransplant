@@ -24,71 +24,10 @@ from data.dataset import NLST_2D_NIFTI_Dataset, NLST_NIFTI_Dataset, NLST_2_5D_Da
 from data.dataset import data_to_slices
 from models.training_modules import binary_dice_coefficient
 from utils.utils import get_model
-from skimage import measure
 
 
 from matplotlib.pyplot import figure, imshow, axis, savefig
 import matplotlib.pyplot as plt
-
-
-def mask_to_border(mask):
-    h, w = mask.shape
-    border = np.zeros((h, w))
-
-    contours = measure.find_contours(mask, 128)
-    for contour in contours:
-        for c in contour:
-            x = int(c[0])
-            y = int(c[1])
-            border[x][y] = 255
-
-    return border
-
-
-def mask_to_bbox(mask):
-    """ Mask to bounding boxes """
-    bboxes = []
-
-    mask = mask_to_border(mask)
-    lbl = measure.label(mask)
-    props = measure.regionprops(lbl)
-    areas = []
-    for prop in props:
-        x1 = prop.bbox[1]
-        y1 = prop.bbox[0]
-
-        x2 = prop.bbox[3]
-        y2 = prop.bbox[2]
-
-        bboxes.append([x1, y1, x2, y2])
-        areas.append((x2-x1) * (y2-y1))
-
-    indices = list(np.argsort(areas))
-
-    sorted_boxes = []
-    for i in indices:
-        sorted_boxes.append(bboxes[i])
-
-    return sorted_boxes
-
-
-def showImagesHorizontally(list_of_arrs):
-    fig = figure()
-    num_files = len(list_of_arrs)
-    for i in range(num_files):
-        a = fig.add_subplot(1, num_files, i+1)
-        image = list_of_arrs[i]
-        imshow(image, cmap='Greys_r')
-        if i == 0:
-            title = 'scan'
-        elif i == 1:
-            title = 'mask'
-        else:
-            title ='prediction'
-        a.set_title(title)
-        axis('off')
-        plt.tight_layout()
-    return fig
 
 
 def showPredictionContour(img, gt, pred, dice, patient_dir, slice_id):
@@ -246,6 +185,12 @@ def main():
             sigmoid_pred = torch.sigmoid(prediction)
             class_pred = torch.round(sigmoid_pred).cpu()
 
+        # TODO: Limit the heart region also for 256, and 128
+        output_pred = np.zeros(class_pred.shape)
+        if len(class_pred.shape) == 2 and config['data']['target_size'][0] == 512:
+            output_pred[81:337, 158:430] = class_pred[81:337, 158:430]
+            class_pred = torch.tensor(output_pred)
+
         # CCA
         connectivity = 6  # only 4,8 (2D) and 26, 18, and 6 (3D) are allowed
         labels_out, N = cc3d.connected_components(class_pred.numpy(), connectivity=connectivity, return_N=True)
@@ -256,6 +201,7 @@ def main():
             class_pred = dict_components[max(dict_components.keys())]
             class_pred = torch.Tensor(class_pred.astype(np.float32))
         except:
+            # No components were found
             pass
 
         dice_coeff = binary_dice_coefficient(class_pred, mask)

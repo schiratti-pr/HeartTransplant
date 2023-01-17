@@ -73,11 +73,13 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx) -> dict[str, Any]:
         patient_path, label_path = list(self.patients_paths.items())[idx]
+        patient_id = patient_path.split('/')[-1][:-4]
         roi = nib.load(patient_path).get_fdata()
 
         roi = array_to_tensor(roi)
         label = nib.load(label_path).get_fdata()
-        label = np.flip(label, -1).copy()
+        if int(patient_id) not in [100108, 100085, 100088, 100092, 100019, 100031, 100046, 100053, 100072, 100081]:
+            label = np.flip(label, -1).copy()
         label = np.transpose(label, [1, 0, 2])
 
         mask = torch.Tensor(label)
@@ -210,11 +212,13 @@ class NLST_2D_NIFTI_Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx) -> dict[str, Any]:
         patient_dir, label_path, slice_id = self.patients_paths[idx]
+        patient_id = patient_dir.split('/')[-1][:-4]
         roi = self.load_slice(patient_dir, slice_id)
         roi = array_to_tensor(roi)
 
         label = nib.load(label_path).get_fdata()
-        label = np.flip(label, -1).copy()
+        if int(patient_id) not in [100108, 100085, 100088, 100092, 100019, 100031, 100046, 100053, 100072, 100081]:
+            label = np.flip(label, -1).copy()
         label = label[:, :, slice_id].T
 
         mask = torch.DoubleTensor(label)
@@ -354,11 +358,13 @@ class NLST_2_5D_Dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx) -> dict[str, Any]:
 
         patient_dir, label_path, slice_id = self.patients_paths[idx]
+        patient_id = patient_dir.split('/')[-1][:-4]
         roi = self.load_slices_2_5(patient_dir, slice_id, self.num_window_slices)
         roi = array_to_tensor(roi)
 
         label = nib.load(label_path).get_fdata()
-        label = np.flip(label, -1).copy()
+        if int(patient_id) not in [100108, 100085, 100088, 100092, 100019, 100031, 100046, 100053, 100072, 100081]:
+            label = np.flip(label, -1).copy()
         label = label[:, :, slice_id].T
 
         mask = torch.DoubleTensor(label)
