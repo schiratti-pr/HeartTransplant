@@ -4,22 +4,23 @@ data:
   raw_directory: '/athena/sablab/scratch/mdo4009/NLST_nifti_manual/'
   annotations_dir: '/athena/sablab/scratch/mdo4009/Annotations - VT/'
   data_splits: '/home/mdo4009/NLST-train_val_test-split.csv'
-  batch_size_per_gpu: 16
+  batch_size_per_gpu: 8
   dataloader_workers_per_gpu: 10
   target_size: [ 512, 512 ]
   num_classes: 1
-  window_step: 1
+  window_step: 2
+  include_normal: True
 
 logging:
   root_path: 'logs_clean'
-  name: 'UNet_2-5D_window1'
+  name: 'SegResNet_2-5D_window2_allSlices'
   train_logs_steps: 500
 
 model:
-  name: 'UNet'
+  name: 'SegResNet'
 
 train:
-  epochs: 150
+  epochs: 200
   precision: 32
   lr: 1.0e-4
   loss:

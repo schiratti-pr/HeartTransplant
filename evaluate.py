@@ -11,6 +11,7 @@ import random
 import cv2
 import cc3d
 import copy
+import math
 
 
 import pytorch_lightning as pl
@@ -28,6 +29,47 @@ from utils.utils import get_model
 
 from matplotlib.pyplot import figure, imshow, axis, savefig
 import matplotlib.pyplot as plt
+
+
+def bbox(array, point, radius):
+    a = array[np.where(np.logical_and(array[:, 0] >= point[0] - radius, array[:, 0] <= point[0] + radius))]
+    b = a[np.where(np.logical_and(a[:, 1] >= point[1] - radius, a[:, 1] <= point[1] + radius))]
+    c = b[np.where(np.logical_and(b[:, 2] >= point[2] - radius, b[:, 2] <= point[2] + radius))]
+    return c
+
+
+def hausdorff(surface_a, surface_b):
+
+    # Taking two arrays as input file, the function is searching for the Hausdorff distane of "surface_a" to "surface_b"
+    dists = []
+
+    l = len(surface_a)
+
+    for i in range(l):
+
+        # walking through all the points of surface_a
+        dist_min = 1000.0
+        radius = 0
+        b_mod = np.empty(shape=(0, 0, 0))
+
+        # increasing the cube size around the point until the cube contains at least 1 point
+        while b_mod.shape[0] == 0:
+            b_mod = bbox(surface_b, surface_a[i], radius)
+            radius += 1
+
+        # to avoid getting false result (point is close to the edge, but along an axis another one is closer),
+        # increasing the size of the cube
+        b_mod = bbox(surface_b, surface_a[i], radius * math.sqrt(3))
+
+        for j in range(len(b_mod)):
+            # walking through the small number of points to find the minimum distance
+            dist = np.linalg.norm(surface_a[i] - b_mod[j])
+            if dist_min > dist:
+                dist_min = dist
+
+        dists.append(dist_min)
+
+    return np.max(dists)
 
 
 def showPredictionContour(img, gt, pred, dice, patient_dir, slice_id):
@@ -154,7 +196,7 @@ def main():
     model.load_state_dict(state_dict)
     model.eval()
 
-    dice_scores = []
+    dice_scores, hd_scores = [], []
     for vis_id in tqdm.tqdm(range(len(dataset))):
         img_ex = dataset[vis_id]
         img, mask = torch.unsqueeze(img_ex['data'], 0), img_ex['label'].squeeze()
@@ -185,10 +227,16 @@ def main():
             sigmoid_pred = torch.sigmoid(prediction)
             class_pred = torch.round(sigmoid_pred).cpu()
 
-        # TODO: Limit the heart region also for 256, and 128
+        # Filtering out everything beyond the pre-calculated heart zone
         output_pred = np.zeros(class_pred.shape)
         if len(class_pred.shape) == 2 and config['data']['target_size'][0] == 512:
             output_pred[81:337, 158:430] = class_pred[81:337, 158:430]
+            class_pred = torch.tensor(output_pred)
+        elif config['data']['target_size'][0] == 256:
+            output_pred[40:168, 79:215, :] = class_pred[40:168, 79:215, :]
+            class_pred = torch.tensor(output_pred)
+        elif config['data']['target_size'][0] == 128:
+            output_pred[20:84, 39:107, ] = class_pred[20:84, 39:107, :]
             class_pred = torch.tensor(output_pred)
 
         # CCA
@@ -203,6 +251,12 @@ def main():
         except:
             # No components were found
             pass
+
+        # Hausdorff distance and Dice score
+        patient_hd_scores = []
+        for sl in range(mask.shape[-1]):
+            patient_hd_scores.append(hausdorff(mask[:, :, sl], class_pred[:, :, sl]))
+        hd_scores.append(np.mean(patient_hd_scores))
 
         dice_coeff = binary_dice_coefficient(class_pred, mask)
         dice_scores.append(dice_coeff)
@@ -224,6 +278,7 @@ def main():
                 pass
 
     print('Mean Dice on {} : {}'.format(args.data_split, np.mean(dice_scores)))
+    print('Mean HD on {} : {}'.format(args.data_split, np.mean(hd_scores)))
 
 
 if __name__ == '__main__':

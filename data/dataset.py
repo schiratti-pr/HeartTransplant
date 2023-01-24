@@ -32,7 +32,7 @@ def pad_volume(vol, roi_size):
                                for idx, val in enumerate(vol.shape[1:])]
             padding_patch = np.zeros(pad_shape)
             vol = np.concatenate([vol, padding_patch], axis=d)
-    return vol
+    return torch.tensor(vol)
 
 
 def array_to_tensor(img_array) -> torch.FloatTensor:
@@ -109,6 +109,11 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
         )
         segtrans.set_random_state(seed=seed)
 
+        # Transformations / augmenting input
+        if self.transform:
+            aug = self.transform({'image': roi, 'label': mask})
+            roi, mask = aug['image'], aug['label']
+
         roi = imtrans(roi)
         mask = segtrans(mask)
 
@@ -117,11 +122,6 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
             roi, mask = pad_volume(roi, self.target_size[0]).double(), pad_volume(mask, self.target_size[0])
         except:
             roi, mask = pad_volume(roi, self.target_size[0]), pad_volume(mask, self.target_size[0])
-
-        # Transformations / augmenting input
-        if self.transform:
-            aug = self.transform({'image': roi, 'label': mask})
-            roi, mask = aug['image'], aug['label']
 
         if self.evaluate_mode:
             return {'data': roi, 'label': mask, 'patient_dir': patient_path}
@@ -406,7 +406,7 @@ class NLST_2_5D_Dataset(torch.utils.data.Dataset):
             return {'data': roi, 'label': mask}
 
 
-def data_to_slices(data, nifti=False):
+def data_to_slices(data, normal_sample=False, nifti=False):
     patient_slices = []
 
     for patient_path, label_path in data.items():
@@ -422,6 +422,13 @@ def data_to_slices(data, nifti=False):
                     patient_slices.append((patient_path, label_path, slice_))
                 else:
                     patient_slices.append((patient_path, label_path, annotation.shape[-1] -slice_-1))
+            else:
+                if normal_sample and slice_ >=2 and slice_<= annotation.shape[-1]-3 and slice_ % 3 == 0:
+                    # Include slices that don't have annotations - non-heart
+                    if nifti:
+                        patient_slices.append((patient_path, label_path, slice_))
+                    else:
+                        patient_slices.append((patient_path, label_path, annotation.shape[-1] - slice_ - 1))
 
     return patient_slices
 

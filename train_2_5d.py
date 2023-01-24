@@ -51,8 +51,10 @@ def main():
             if str(patient_id) in key and split == 'val' and str(patient_id) != '100092':
                 data_dict_val.update({key: data_dict[key]})
 
-    data_train = data_to_slices(collections.OrderedDict(data_dict_train), nifti=True)
-    data_val = data_to_slices(collections.OrderedDict(data_dict_val), nifti=True)
+    data_train = data_to_slices(collections.OrderedDict(data_dict_train), nifti=True,
+                                normal_sample=config['data'].get('include_normal'))
+    data_val = data_to_slices(collections.OrderedDict(data_dict_val), nifti=True,
+                              normal_sample=config['data'].get('include_normal'))
 
     print('Train:', len(data_train), 'Val:', len(data_val))
 
@@ -106,7 +108,7 @@ def main():
         auto_insert_metric_name=True
     )
     lr_monitor = LearningRateMonitor()
-    early_stop_callback = EarlyStopping(monitor="val_epoch/loss", min_delta=0.0, patience=10, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_epoch/loss", min_delta=0.0, patience=15, verbose=False, mode="min")
     callbacks = [checkpoint_callback, lr_monitor, early_stop_callback]
 
     tb_logger = TensorBoardLogger(config['logging']['root_path'], config['logging']['name'], version=experiment_name)
