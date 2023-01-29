@@ -1,5 +1,4 @@
 from typing import Dict, Any
-import collections
 import glob
 
 import torch
@@ -78,6 +77,7 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
 
         roi = array_to_tensor(roi)
         label = nib.load(label_path).get_fdata()
+        original_z = label.shape[-1]
         if int(patient_id) not in [100108, 100085, 100088, 100092, 100019, 100031, 100046, 100053, 100072, 100081]:
             label = np.flip(label, -1).copy()
         label = np.transpose(label, [1, 0, 2])
@@ -124,7 +124,7 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
             roi, mask = pad_volume(roi, self.target_size[0]), pad_volume(mask, self.target_size[0])
 
         if self.evaluate_mode:
-            return {'data': roi, 'label': mask, 'patient_dir': patient_path}
+            return {'data': roi, 'label': mask, 'patient_dir': patient_path, 'original_z':original_z}
         else:
             return {'data': roi.double(), 'label': mask}
 
@@ -435,37 +435,21 @@ def data_to_slices(data, normal_sample=False, nifti=False):
 
 if __name__ == '__main__':
     # Dictionary with directories to files in the format: {patient_dir} : {label_path}
-    data_dict = {
-        '/Users/mariadobko/Documents/Cornell/Lab/NLST First 60 Raw/NLST First 60 Raw - Part01 - 10Pats/100005/'
-        '01-02-1999-NLST-LSS-72969/2.000000-0OPAGELS16B3702.514060.00.11.375-43455':
-            '/Users/mariadobko/Downloads/100005-label.nii'
-    }
 
-    data_dict = collections.OrderedDict(data_dict)
+    raw_directory = '/athena/sablab/scratch/mdo4009/NLST_nifti_manual/'
+    annotations_dir = '/athena/sablab/scratch/mdo4009/Annotations - VT/'
 
-    ds = NLSTDataset(
+    data_dict = {}
+    for raw_sample in glob.glob(raw_directory + '**'):
+        sample_id = raw_sample.split('/')[-1][:-4]
+        for label_path in glob.glob(annotations_dir + '**'):
+            if sample_id in label_path and '.nii' in label_path:
+                data_dict.update({raw_sample: label_path})
+
+    train_dataset = NLST_NIFTI_Dataset(
         patients_paths=data_dict,
         target_size=[256, 256, 256],
+        transform=None
     )
-    test_roi, test_mask = ds[0]['data'], ds[0]['label']
-    print('3D dataset', test_roi.shape, test_mask.shape)
 
-    # For 2D images
-    data_dict_2d = data_to_slices(data_dict)
-    ds2d = NLST_2D_Dataset(
-        patients_paths=data_dict_2d,
-        target_size=[256, 256],
-    )
-    test_roi_slice, test_mask_slice = ds2d[0]['data'], ds2d[0]['label']
-    print('2D dataset', test_roi_slice.shape, test_mask_slice.shape)
-
-    # For 2.5D images
-    data_dict_2d = data_to_slices(data_dict)
-    ds2_5d = NLST_2_5D_Dataset(
-        patients_paths=data_dict_2d,
-        target_size=[256, 256],
-        window_step=3,
-    )
-    test_roi_slice, test_mask_slice = ds2_5d[0]['data'], ds2_5d[0]['label']
-    print('2.5-D dataset', test_roi_slice.shape, test_mask_slice.shape)
-
+    r = train_dataset[0]

@@ -15,7 +15,6 @@ import nibabel as nib
 import pytorch_lightning as pl
 import torch
 import torch.backends.cudnn as cudnn
-from monai.data import TestTimeAugmentation
 from monai.transforms import (Compose, RandAffined, EnsureChannelFirst, ScaleIntensity)
 
 
@@ -134,10 +133,11 @@ def main():
     model.load_state_dict(state_dict)
     model.eval()
 
-    dice_scores = []
+    dice_scores, case_ids = [], []
     # Run prediction per patient
     for idx in tqdm.tqdm(range(len(data_dict_split))):
         patient_path, label_path = list(data_dict_split.items())[idx]
+        case_id = patient_path.split('/')[-1][:-4]
         roi, mask = prepare_patient(patient_path, label_path)
         mask = mask.squeeze()
 
@@ -178,7 +178,11 @@ def main():
         prediction = torch.tensor(output_pred)
 
         dice_coeff = binary_dice_coefficient(prediction, mask)
-        dice_scores.append(dice_coeff)
+        dice_scores.append(dice_coeff), case_ids.append(case_id)
+
+    df = pd.DataFrame([dice_scores, case_ids]).T
+    df = df.rename(columns={0: "dice", 1: "patient_id"})
+    df.to_csv('25d_{}_dice_per_patient_{}.csv'.format(config['model']['name'], args.data_split), index=False)
 
     print('Mean Dice per patient on {} : {}'.format(args.data_split, np.mean(dice_scores)))
 

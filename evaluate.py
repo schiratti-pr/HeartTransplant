@@ -12,13 +12,14 @@ import cv2
 import cc3d
 import copy
 import math
+import nibabel as nib
 
 
 import pytorch_lightning as pl
 import torch
 import torch.backends.cudnn as cudnn
 from monai.data import TestTimeAugmentation
-from monai.transforms import (Compose, RandAffined)
+from monai.transforms import (Compose, Resize, RandAffined)
 
 
 from data.dataset import NLST_2D_NIFTI_Dataset, NLST_NIFTI_Dataset, NLST_2_5D_Dataset
@@ -177,7 +178,8 @@ def main():
             patients_paths=data_dict_split,
             target_size=config['data']['target_size'],
             transform=None,
-            crop_heart=config['data'].get('crop_heart')
+            crop_heart=config['data'].get('crop_heart'),
+            eval_mode=True
         )
         number_channels = 1
 
@@ -196,7 +198,7 @@ def main():
     model.load_state_dict(state_dict)
     model.eval()
 
-    dice_scores, hd_scores = [], []
+    dice_scores, hd_scores, case_ids = [], [], []
     for vis_id in tqdm.tqdm(range(len(dataset))):
         img_ex = dataset[vis_id]
         img, mask = torch.unsqueeze(img_ex['data'], 0), img_ex['label'].squeeze()
@@ -249,17 +251,18 @@ def main():
             class_pred = dict_components[max(dict_components.keys())]
             class_pred = torch.Tensor(class_pred.astype(np.float32))
         except:
-            # No components were found
-            pass
+            pass   # No components were found
 
-        # Hausdorff distance and Dice score
-        patient_hd_scores = []
-        for sl in range(mask.shape[-1]):
-            patient_hd_scores.append(hausdorff(mask[:, :, sl], class_pred[:, :, sl]))
-        hd_scores.append(np.mean(patient_hd_scores))
+        # Calculate Hausdorff distance and Dice score if the volumes are in 3D
+        # if len(class_pred.shape) == 3:
+        #     patient_hd_scores = []
+        #     for sl in range(mask.shape[-1]):
+        #         patient_hd_scores.append(hausdorff(mask[:, :, sl], class_pred[:, :, sl]))
+        #     hd_scores.append(np.mean(patient_hd_scores))
 
         dice_coeff = binary_dice_coefficient(class_pred, mask)
-        dice_scores.append(dice_coeff)
+        dice_scores.append(dice_coeff.item())
+        case_ids.append(img_ex['patient_dir'].split('/')[-1][:-4])
 
         if args.save_fig:
             if len(config['data']['target_size']) == 2:
@@ -271,14 +274,22 @@ def main():
                 savefig(args.result_save + '/{}_{}.png'.format(vis_id, round(dice_coeff.item()*100, 2)),
                         bbox_inches='tight')
             else:
+                # For 3d saving the entire prediction mask
                 if not os.path.exists(args.result_save):
                     os.makedirs(args.result_save)
-                    # TODO: For 3d saving the entire prediction mask
 
-                pass
+                nifti_file = nib.Nifti1Image(class_pred.numpy(), np.eye(4))
+                patient_id = img_ex['patient_dir'].split('/')[-1]
+                scan_path_save = os.path.join(args.result_save,  str(patient_id))
+                nib.save(nifti_file, scan_path_save)
+
+    df = pd.DataFrame([dice_scores, case_ids]).T
+    df = df.rename(columns={0: "dice", 1: "patient_id"})
+    df.to_csv('3d_{}_dice_per_patient_{}.csv'.format(config['model']['name'], args.data_split), index=False)
 
     print('Mean Dice on {} : {}'.format(args.data_split, np.mean(dice_scores)))
-    print('Mean HD on {} : {}'.format(args.data_split, np.mean(hd_scores)))
+    if len(hd_scores) > 0:
+        print('Mean HD on {} : {}'.format(args.data_split, np.mean(hd_scores)))
 
 
 if __name__ == '__main__':
