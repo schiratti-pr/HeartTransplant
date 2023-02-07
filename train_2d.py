@@ -51,8 +51,10 @@ def main():
             if str(patient_id) in key and split == 'val' and str(patient_id) != '100092':
                 data_dict_val.update({key: data_dict[key]})
 
-    data_train = data_to_slices(collections.OrderedDict(data_dict_train), nifti=True)
-    data_val = data_to_slices(collections.OrderedDict(data_dict_val), nifti=True)
+    data_train = data_to_slices(collections.OrderedDict(data_dict_train), nifti=True,
+                                normal_sample=config['data'].get('include_normal'))
+    data_val = data_to_slices(collections.OrderedDict(data_dict_val), nifti=True,
+                              normal_sample=config['data'].get('include_normal'))
 
     print('Train:', len(data_train), 'Val:', len(data_val))
 

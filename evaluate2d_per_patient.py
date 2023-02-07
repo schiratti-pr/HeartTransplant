@@ -178,7 +178,7 @@ def main():
         prediction = torch.tensor(output_pred)
 
         dice_coeff = binary_dice_coefficient(prediction, mask)
-        dice_scores.append(dice_coeff), case_ids.append(case_id)
+        dice_scores.append(dice_coeff.item()), case_ids.append(case_id)
 
     df = pd.DataFrame([dice_scores, case_ids]).T
     df = df.rename(columns={0: "dice", 1: "patient_id"})
