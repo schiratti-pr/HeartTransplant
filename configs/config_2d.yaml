@@ -8,10 +8,11 @@ data:
   dataloader_workers_per_gpu: 12
   target_size: [ 512, 512 ]
   num_classes: 1
+  include_normal: True
 
 logging:
   root_path: 'logs_clean'
-  name: 'SegResNet-2D-aug'
+  name: 'SegResNet-2D-aug_allSlices'
   train_logs_steps: 300
 
 model:
