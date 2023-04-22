@@ -7,12 +7,10 @@ data:
   batch_size_per_gpu: 2
   dataloader_workers_per_gpu: 1
   target_size: [ 256, 256, 256]
-  num_classes: 1
-#  crop_heart: False
 
 logging:
-  root_path: 't'
-  name: 'best_nnUNet_split'
+  root_path: 'logs_reconstruction'
+  name: 'UNet3d_256'
   train_logs_steps: 100
 
 model:
@@ -24,7 +22,7 @@ train:
   precision: 32
   lr: 1.0e-4
   loss:
-    name: 'BCEWithLogitsLoss'
+    name: 'MSE'
 
   aug:
     name: 'basic3d'

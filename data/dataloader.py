@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from data.dataset import NLSTDataset, NLST_NIFTI_Dataset, NLST_2D_Dataset, NLST_2D_NIFTI_Dataset, NLST_2_5D_Dataset
+from data.dataset import NLSTDataset, NLST_NIFTI_Dataset, NLST_2D_Dataset, NLST_2D_NIFTI_Dataset, NLST_2_5D_Dataset, NLST_Reconstruct_Dataset
 from data.aug import AUGMENTATIONS
 
 
@@ -77,6 +77,33 @@ class NLSTDataModule(BaseDataModule):
                 target_size=self.target_size,
                 transform=None
             )
+
+
+class NLSTReconstructionModule(BaseDataModule):
+    def __init__(self, data_dict_train, data_dict_val, batch_size, num_workers, target_size, nii_format=True,
+                 transform: dict = None, crop_heart=False):
+        super(NLSTReconstructionModule, self).__init__(
+            data_dict_train, data_dict_val, batch_size, num_workers, target_size,
+        )
+        self.target_size = target_size
+        if transform is not None:
+            self.transform = AUGMENTATIONS.get(transform['name'])
+        else:
+            self.transform = None
+
+        self.nii_format = nii_format
+
+    def setup(self, stage) -> None:
+        self.train_dataset = NLST_Reconstruct_Dataset(
+            patients_paths=self.data_dict_train,
+            target_size=self.target_size,
+            transform=self.transform,
+        )
+        self.val_dataset = NLST_Reconstruct_Dataset(
+            patients_paths=self.data_dict_val,
+            target_size=self.target_size,
+            transform=None,
+        )
 
 
 class NLST_2D_DataModule(BaseDataModule):

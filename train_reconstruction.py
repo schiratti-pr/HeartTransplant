@@ -11,13 +11,13 @@ from pytorch_lightning.callbacks.lr_monitor import LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from data.dataloader import NLSTDataModule
-from models import NLSTTrainingModule
+from data.dataloader import NLSTReconstructionModule
+from models import NLSTReconstructModule
 
 
 def main():
     parser = argparse.ArgumentParser(description='Processing configuration for training')
-    parser.add_argument('--config', type=str, help='path to config file', default='configs/config.yaml')
+    parser.add_argument('--config', type=str, help='path to config file', default='configs/config_reconstruct.yaml')
     args = parser.parse_args()
 
     pl.seed_everything(int(os.environ.get('LOCAL_RANK', 0)))
@@ -52,7 +52,7 @@ def main():
     print('Train:', len(data_dict_train), 'Val:', len(data_dict_val))
 
     # Init Lightning Data Module
-    dm = NLSTDataModule(
+    dm = NLSTReconstructionModule(
         data_dict_train=data_dict_train,
         data_dict_val=data_dict_val,
         nii_format=True,
@@ -64,11 +64,10 @@ def main():
     )
 
     # Init model
-    model = NLSTTrainingModule(
+    model = NLSTReconstructModule(
         net=config['model']['name'],
         lr=config['train']['lr'],
-        loss=config['train']['loss'],
-        pretrained_weights=config['model'].get('pretrained_weights')
+        loss=config['train']['loss']
     )
 
     # Set callbacks

@@ -142,12 +142,14 @@ def main():
                 data_dict.update({raw_sample: label_path})
 
     # Data split
-    splits = pd.read_csv(config['data']['data_splits'])
+    # splits = pd.read_csv(config['data']['data_splits'])
+    splits = pd.read_csv('~/nnUNet-test-split.csv')
+    splits['split'] = 'test'
 
     data_dict_split = {}
     for index, row in splits.iterrows():
         patient_id = row['id']
-        split = row['set']
+        split = row['split'] # set
 
         for key in data_dict.keys():
             if str(patient_id) in key and split == args.data_split:
