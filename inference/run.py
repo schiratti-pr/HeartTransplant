@@ -23,7 +23,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Processing configuration for training')
     parser.add_argument('--scan_path', type=str)
-    parser.add_argument('--device', type=str, default='cuda:1')
+    parser.add_argument('--device', type=str, default='cpu')
     parser.add_argument('--result_save', type=str, help='path to folder', default='inference_results')
 
     args = parser.parse_args()
@@ -34,7 +34,7 @@ def main():
     data_sample = preprocess(args.scan_path)
 
     # Init model
-    model = get_model('UNet', spatial_dims=3, num_in_channels=1)
+    model = get_model(spatial_dims=3, num_in_channels=1)
     model.to(device)
 
     # Load weights
@@ -72,7 +72,7 @@ def main():
         os.makedirs(args.result_save)
 
     nifti_file = nib.Nifti1Image(class_pred.numpy(), np.eye(4))
-    name_file = args.scan_path.split('/')[-1].split('.')[0] + '_pred'
+    name_file = args.scan_path.split('/')[-1].split('.')[0] + 'pred'
     scan_path_save = os.path.join(args.result_save,  name_file)
     nib.save(nifti_file, scan_path_save)
     print('Result saved to: {}.nii'.format(scan_path_save))

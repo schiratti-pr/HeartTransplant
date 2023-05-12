@@ -1,19 +1,15 @@
-from monai.networks.nets import SegResNet, SwinUNETR, UNet
+from monai.networks.nets import UNet
 
 import torch
+import glob
 import numpy as np
 import pydicom as dicom
 import nibabel as nib
 from monai.transforms import (
-    Activations,
     EnsureChannelFirst,
-    AsDiscrete,
     Compose,
-    LoadImage,
-    RandSpatialCrop,
     Resize,
-    ScaleIntensity,
-    CenterSpatialCrop
+    ScaleIntensity
 )
 
 
@@ -36,8 +32,41 @@ def pad_volume(vol, roi_size):
     return torch.tensor(vol)
 
 
+def get_pixels_hu(scans):
+    image = np.stack([s.pixel_array for s in scans])
+    image = image.astype(np.int32)
+
+    # Set outside-of-scan pixels to 0
+    # The intercept is usually -1024, so air is approximately 0
+    image[image == -2000] = 0
+
+    # Convert to Hounsfield units (HU)
+    intercept = scans[0].RescaleIntercept
+    slope = scans[0].RescaleSlope
+
+    if slope != 1:
+        image = slope * image.astype(np.float64)
+        image = image.astype(np.int16)
+
+    image += np.int32(intercept)
+    # 1000 = 1  > 500, hist
+    return np.array(image, dtype=np.int16)
+
+
+def load_sample(exam_path):
+    slices_exam = glob.glob(exam_path + '/**')
+    d = {sl_exam: int(sl_exam.split('/')[-1].split('-')[-1][:-4]) for sl_exam in slices_exam}
+    sorted_dict = {k: v for k, v in sorted(d.items(), key=lambda item: item[1])}
+
+    slices = [dicom.dcmread(sl) for sl in sorted_dict.keys()]
+    # Hounsfield units
+    hu_slices = get_pixels_hu(slices)
+    return hu_slices
+
+
 def preprocess(path_to_scan):
-    roi = nib.load(path_to_scan).get_fdata()
+    # roi = nib.load(path_to_scan).get_fdata()
+    roi = load_sample(path_to_scan)
 
     roi = array_to_tensor(roi)
     # Transform to 3D cube roi with same size for all dimensions
@@ -58,37 +87,15 @@ def preprocess(path_to_scan):
     return roi
 
 
-def get_model(name, spatial_dims=2, num_in_channels=1):
-    if name == 'SegResNet':
-        net = SegResNet(
-            spatial_dims=spatial_dims,
-            blocks_down=[1, 2, 2, 4],
-            blocks_up=[1, 1, 1],
-            init_filters=16,
-            in_channels=num_in_channels,
-            out_channels=1,
-            dropout_prob=0.2,
-        )
-    elif name == 'SwinUNETR':
-        net = SwinUNETR(
-            img_size=512,
-            in_channels=num_in_channels,
-            out_channels=1,
-            feature_size=48,
-            drop_rate=0.0,
-            attn_drop_rate=0.0,
-            dropout_path_rate=0.0,
-            spatial_dims=spatial_dims
-        )
-    elif name == 'UNet':
-        net = UNet(
-            spatial_dims=spatial_dims,
-            in_channels=num_in_channels,
-            out_channels=1,
-            channels=(16, 32, 64, 128, 256),
-            strides=(2, 2, 2, 2),
-            num_res_units=2,
-        )
+def get_model(spatial_dims=2, num_in_channels=1):
+    net = UNet(
+        spatial_dims=spatial_dims,
+        in_channels=num_in_channels,
+        out_channels=1,
+        channels=(16, 32, 64, 128, 256),
+        strides=(2, 2, 2, 2),
+        num_res_units=2,
+    )
     if spatial_dims == 3:
         net = net.double()
     else:
