@@ -83,7 +83,7 @@ Hierarchy of this repository:
     ├── reconstruction.py   # for self-supervised pre-training
     ├── training_modules.py  # custom lightning trainers
 ├── utils  --additional tools 
-├── evaluate,py
+├── evaluate.py
 ├── evaluate2d_per_patient.py
 ├── train.py
 ├── train_2_5d.py
