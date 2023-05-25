@@ -26,7 +26,7 @@ Our pre-processing steps include:
 
 2. Conversion to Hounsfield units
 
-3. Resampling slice thickness -  https://vincentblog.xyz/posts/medical-images-in-python-computed-tomography 
+3. Resampling slice thickness - [tutorial](https://vincentblog.xyz/posts/medical-images-in-python-computed-tomography) 
 
 4. Resizing to desired size
 
