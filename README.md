@@ -1,6 +1,5 @@
-# Heart Transplant
+# Heart Segmentation
 Estimating size of the heart to determine the fit between donor's and patient's organs.
-
 Preliminary task in progress: heart segmentation. 
 
 ## Data 
