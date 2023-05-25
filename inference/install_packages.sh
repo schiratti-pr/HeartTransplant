@@ -11,6 +11,6 @@ pip install --upgrade pip
 # installing packages
 pip install torch
 
-pip install monai==1.0.1 pydicom nibabel connected-components-3d
+pip install monai==1.0.1 pydicom nibabel connected-components-3d opencv-python matplotlib
 
 echo "Done! Your directory is ready for inference"
