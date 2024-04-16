@@ -170,27 +170,27 @@ class NLSTTrainingModule(LightningModule):
 
         return {'loss': loss, 'dice': dice_coeff}
 
-    def validation_epoch_end(self, outputs: list):
-        """Aggregates data from each validation step
+    # def validation_epoch_end(self, outputs: list):
+    #     """Aggregates data from each validation step
 
-        Args:
-            outputs: the returned values from each validation step
+    #     Args:
+    #         outputs: the returned values from each validation step
 
-        Returns:
-            dict: the aggregated outputs
-        """
-        mean_outputs = {}
-        for k in outputs[0].keys():
-            mean_outputs[k] = torch.stack([x[k] for x in outputs]).mean()
+    #     Returns:
+    #         dict: the aggregated outputs
+    #     """
+    #     mean_outputs = {}
+    #     for k in outputs[0].keys():
+    #         mean_outputs[k] = torch.stack([x[k] for x in outputs]).mean()
 
-        tqdm.write('Dice: \t%.3f' % mean_outputs['dice'].item())
-        self.log("val_epoch/loss", mean_outputs['loss'].item())
+    #     tqdm.write('Dice: \t%.3f' % mean_outputs['dice'].item())
+    #     self.log("val_epoch/loss", mean_outputs['loss'].item())
 
-    def training_epoch_end(self, outputs: list):
-        """Aggregates data from each training step
-        """
-        mean_outputs = {}
-        for k in outputs[0].keys():
-            mean_outputs[k] = torch.stack([x[k] for x in outputs]).mean()
+    # def training_epoch_end(self, outputs: list):
+    #     """Aggregates data from each training step
+    #     """
+    #     mean_outputs = {}
+    #     for k in outputs[0].keys():
+    #         mean_outputs[k] = torch.stack([x[k] for x in outputs]).mean()
 
-        tqdm.write('Dice Train: \t%.3f' % mean_outputs['dice'].item())
+    #     tqdm.write('Dice Train: \t%.3f' % mean_outputs['dice'].item())

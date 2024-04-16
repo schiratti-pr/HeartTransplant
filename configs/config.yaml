@@ -1,9 +1,9 @@
 gpus: [0]
 
 data:
-  raw_directory: '/athena/sablab/scratch/mdo4009/NLST_nifti_manual/'
-  annotations_dir: '/athena/sablab/scratch/mdo4009/Annotations - VT/'
-  data_splits: '/athena/sablab/scratch/mdo4009/nnUNet-train_val_test-split.csv' #'/home/mdo4009/NLST-train_val_test-split.csv'
+  raw_directory: 'C:/Users/pps21/Documents/Cornell/data/NLST_nifti_60/'
+  annotations_dir: 'C:/Users/pps21/Box/NLST Chest CT/Annotations - VT/'
+  data_splits: 'C:/Users/pps21/Documents/Cornell/data/nnUNet-train_val-split.csv'
   batch_size_per_gpu: 2
   dataloader_workers_per_gpu: 1
   target_size: [ 256, 256, 256]

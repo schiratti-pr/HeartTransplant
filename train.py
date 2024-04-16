@@ -18,7 +18,8 @@ from models import NLSTTrainingModule
 def main():
     parser = argparse.ArgumentParser(description='Processing configuration for training')
     parser.add_argument('--config', type=str, help='path to config file', default='configs/config.yaml')
-    args = parser.parse_args()
+    # args = parser.parse_args()
+    args, unknown = parser.parse_known_args() # solution for jupyter run
 
     pl.seed_everything(int(os.environ.get('LOCAL_RANK', 0)))
 
@@ -30,10 +31,12 @@ def main():
 
     data_dict = {}
     for raw_sample in glob.glob(raw_directory + '**'):
-        sample_id = raw_sample.split('/')[-1][:-4]
-        for label_path in glob.glob(annotations_dir + '**'):
-            if sample_id in label_path and '.nii' in label_path:
-                data_dict.update({raw_sample:label_path})
+        # sample_id = raw_sample.split('/')[-1][:-4]
+        if '.nii' in raw_sample:
+            sample_id = raw_sample.split('\\')[-1][:-4]
+            for label_path in glob.glob(annotations_dir + '**'):
+                if sample_id in label_path and '.nii' in label_path and all(sample_id not in key for key in data_dict.keys()):
+                    data_dict.update({raw_sample:label_path})
 
     # Data split
     splits = pd.read_csv(config['data']['data_splits'])
@@ -104,9 +107,9 @@ def main():
     tb_logger = TensorBoardLogger(config['logging']['root_path'], config['logging']['name'], version=experiment_name)
 
     trainer = pl.Trainer(
-        gpus=config.get('gpus'),
+        # gpus=config.get('gpus'),
         max_epochs=config['train']['epochs'],
-        accelerator="cuda",
+        accelerator="cuda", # "cuda"
         gradient_clip_val=config['train'].get('grad_clip', 0),
         log_every_n_steps=config['logging']['train_logs_steps'],
         num_sanity_val_steps=0,

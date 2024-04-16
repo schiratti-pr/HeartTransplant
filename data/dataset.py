@@ -188,7 +188,7 @@ class NLST_Reconstruct_Dataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.patients_paths)
 
-    def __getitem__(self, idx) -> dict[str, Any]:
+    def __getitem__(self, idx) -> Dict[str, Any]:
         patient_path, label_path = list(self.patients_paths.items())[idx]
         patient_id = patient_path.split('/')[-1][:-4]
         roi = nib.load(patient_path).get_fdata()
@@ -249,9 +249,10 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.patients_paths)
 
-    def __getitem__(self, idx) -> dict[str, Any]:
+    def __getitem__(self, idx) -> Dict[str, Any]:
         patient_path, label_path = list(self.patients_paths.items())[idx]
         patient_id = patient_path.split('/')[-1][:-4]
+        # patient_id = patient_path.split('\\')[-1][:6]
         roi = nib.load(patient_path).get_fdata()
 
         roi = array_to_tensor(roi)
@@ -333,7 +334,7 @@ class NLSTDataset(torch.utils.data.Dataset):
         hu_slices = get_pixels_hu(slices)
         return hu_slices
 
-    def __getitem__(self, idx) -> dict[str, Any]:
+    def __getitem__(self, idx) -> Dict[str, Any]:
         patient_dir, label_path = list(self.patients_paths.items())[idx]
         roi = self.load_sample(patient_dir)
 
@@ -389,7 +390,7 @@ class NLST_2D_NIFTI_Dataset(torch.utils.data.Dataset):
 
         return image
 
-    def __getitem__(self, idx) -> dict[str, Any]:
+    def __getitem__(self, idx) -> Dict[str, Any]:
         patient_dir, label_path, slice_id = self.patients_paths[idx]
         patient_id = patient_dir.split('/')[-1][:-4]
         roi = self.load_slice(patient_dir, slice_id)
@@ -470,7 +471,7 @@ class NLST_2D_Dataset(torch.utils.data.Dataset):
 
         return image
 
-    def __getitem__(self, idx) -> dict[str, Any]:
+    def __getitem__(self, idx) -> Dict[str, Any]:
         patient_dir, label_path, slice_id = self.patients_paths[idx]
         roi = self.load_slice(patient_dir, slice_id)
         roi = array_to_tensor(roi)
@@ -534,7 +535,7 @@ class NLST_2_5D_Dataset(torch.utils.data.Dataset):
 
         return image
 
-    def __getitem__(self, idx) -> dict[str, Any]:
+    def __getitem__(self, idx) -> Dict[str, Any]:
 
         patient_dir, label_path, slice_id = self.patients_paths[idx]
         patient_id = patient_dir.split('/')[-1][:-4]
