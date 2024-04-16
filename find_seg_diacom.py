@@ -6,6 +6,17 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import yaml
 import pandas as pd
+import re
+
+# Define a function to extract the year from the filename
+def extract_year(filename):
+    match = re.search(r'-([0-9]{4})-', filename)
+    return int(match.group(1)) if match else 0
+
+def get_sorted_scan(path_patient):
+    all_scans = glob.glob(path_patient + '/**')
+    sorted_scans = sorted(all_scans, key=extract_year)
+    return sorted_scans
 
 # Define source and destination directories
 source_dir = r"C:\Users\pps21\Box\NLST Chest CT\Annotations - VT"
@@ -18,14 +29,7 @@ mrb_files = [f for f in os.listdir(source_dir) if f.endswith('.mrb')]
 uids_dict = {}
 index_diacom = {}
 
-def get_first_scan(path_patient):
-    all_scans = glob.glob(path_patient + '/**')
-    years = [int(i.split('\\')[-1].split('-')[2]) for i in all_scans]
-    first_year = np.sort(years)[0]
-    scan = [el for el in all_scans if '-' + str(first_year) + '-' in el][0]
-    return scan
-
-for mrb_file in mrb_files[60:]:
+for mrb_file in mrb_files:
     
     subject_id = mrb_file.split('-')[0]
     
@@ -121,49 +125,60 @@ for mrb_file in mrb_files[60:]:
     os.remove(os.path.join(dest_dir, zip_file))
     #os.remove(os.path.join(dest_dir, unzip_dir))
     
-    # Find the diacom folders
-    input_dir = r"C:\Users\pps21\Documents\Cornell\data\NLST Raw Datasets"
+# Fix error
+index_diacom['100188'] = 0
+
+# Find the diacom folders
+input_dir = r"C:\Users\pps21\Documents\Cornell\data\NLST Raw Datasets"
+
+patients_cases = glob.glob(input_dir + '/**/**')
+diacom_path = dict()
+for case in patients_cases:
+    # Create directory for a patient
+    subject_id = case.split('\\')[-1]
+
+    scan_paths = get_sorted_scan(case)
     
-    patients_cases = glob.glob(input_dir + '/**/**')
-    diacom_path = dict()
-    for case in patients_cases:
-        # Create directory for a patient
-        subject_id = case.split('\\')[-1]
+    c = 0
+    if len(diacom_path) < 60:
+        scan_used = []
+        while not scan_used:
+            scans = glob.glob(scan_paths[c] + '/**')
+            scan_used = [s for s in scans if s.split('\\')[-1].split('-')[-1] == uids_dict[subject_id]]
+            c+=1
+        scan_used = scan_used[0]
+    else:
+        scan_used = None
+        while not scan_used:
+            scans = glob.glob(scan_paths[c] + '/**')
+            scan_used = scans[index_diacom[subject_id]]
+            c+=1
+    diacom_path[subject_id] = scan_used
+    
+# Export used DIACOM path
+diacom_path = {int(key): value.split('\\')[-2] + '/' + value.split('\\')[-1]  for key, value in diacom_path.items()}
+with open(r"C:\Users\pps21\Documents\Cornell\data\path_diacom.yaml", 'w') as file:
+    yaml.dump(diacom_path, file)
+    
+## Compare diacom to previous study
+with open(r'C:\Users\pps21\Documents\Cornell\HeartTransplant\scan-mask-matches.yaml', 'r') as file:
+    diacom_path_maria = yaml.safe_load(file)
 
-        scan_path = get_first_scan(case)
-        scans = glob.glob(scan_path + '/**')
-        
-        if len(diacom_path) < 60:
-            scan = [s for s in scans if s.split('\\')[-1].split('-')[-1][:-5] == uids_dict[subject_id]]
-            scan = scans[0]
-        else:
-            scan = scans[index_diacom[subject_id]]
-        
-        diacom_path[subject_id] = scan
-        
-    # Export used DIACOM path
-    diacom_path = {int(key): value.split('\\')[-2] + '/' + value.split('\\')[-1]  for key, value in diacom_path.items()}
-    with open(r"C:\Users\pps21\Documents\Cornell\data\path_diacom.yaml", 'w') as file:
-        yaml.dump(diacom_path, file)
-        
-    ## Compare diacom to previous study
-    with open(r'C:\Users\pps21\Documents\Cornell\HeartTransplant\scan-mask-matches.yaml', 'r') as file:
-        diacom_path_maria = yaml.safe_load(file)
+dict1=diacom_path_maria
+dict2=diacom_path
 
-    dict1=diacom_path_maria
-    dict2=diacom_path
+# Get the union of all keys
+keys = set(dict1.keys()).union(set(dict2.keys()))
 
-    # Get the union of all keys
-    keys = set(dict1.keys()).union(set(dict2.keys()))
+# Create a DataFrame
+df = pd.DataFrame({
+    'key': list(keys),
+    'value1': [dict1.get(key, np.nan) for key in keys],
+    'value2': [dict2.get(key, np.nan) for key in keys],
+})
 
-    # Create a DataFrame
-    df = pd.DataFrame({
-        'key': list(keys),
-        'value1': [dict1.get(key, np.nan) for key in keys],
-        'value2': [dict2.get(key, np.nan) for key in keys],
-    })
-
-    # Add a flag column
-    df['flag'] = df['value1'] == df['value2']
-    df.columns = ['subject_id', 'prev_study', 'new_study', 'is_equal']
-    df.to_csv(r"C:\Users\pps21\Documents\Cornell\data\compare_diacom_path.csv", index=False)
+# Add a flag column
+df['flag'] = df['value1'] == df['value2']
+df['flag'] = df['flag'].astype(int)
+df.columns = ['subject_id', 'prev_study', 'new_study', 'is_equal']
+df.to_csv(r"C:\Users\pps21\Documents\Cornell\data\compare_diacom_path.csv", index=False)
