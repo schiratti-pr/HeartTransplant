@@ -46,6 +46,13 @@ def covert_HU(image, intercept, slope):
 
 
 if __name__ == '__main__':
+    
+    ###
+    # This script is used to convert the raw DICOM files to NIFTI files.
+    # Using diacom2nifti package or manually converting the Hounsfield units.
+    # Optimally finding the correct scan for each patient   
+    ###
+    
     input_dir = r"C:\Users\pps21\Documents\Cornell\data\NLST Raw Datasets"
     save_dir = r"C:\Users\pps21\Documents\Cornell\data\NLST_nifti"
 
@@ -96,49 +103,24 @@ if __name__ == '__main__':
             chosen_scan = scans[0]
             diacom_path[case_id] = chosen_scan
 
+        if True:
             # Opens the DIACOM scans and convert directly to NIFTI
             scan_path_save = path_to_save + '.nii'
-            # dicom2nifti.dicom_series_to_nifti(chosen_scan, scan_path_save, reorient_nifti=True)
+            dicom2nifti.dicom_series_to_nifti(chosen_scan, scan_path_save, reorient_nifti=True)
 
-            # # Open the scans and save to NIFTI (from intermediary array)
-            # sample, intercept, slope = load_sample(chosen_scan)
-            # array = np.array(sample, dtype=np.float32)
+        else:
+            # Open the scans and save to NIFTI (from intermediary array)
+            sample, intercept, slope = load_sample(chosen_scan)
+            array = np.array(sample, dtype=np.float32)
 
-            # array = covert_HU(array, intercept, slope)
+            array = covert_HU(array, intercept, slope)
 
-            # affine = np.eye(4)
-            # nifti_file = nib.Nifti1Image(array, affine)
+            affine = np.eye(4)
+            nifti_file = nib.Nifti1Image(array, affine)
 
-            # scan_path_save = path_to_save + '.nii'
-            # nib.save(nifti_file, scan_path_save)
+            scan_path_save = path_to_save + '.nii'
+            nib.save(nifti_file, scan_path_save)
 
     # for c in failed_patients:
     #     print(c, t[c])
     print(len(failed_patients))
-
-    # Export used DIACOM path
-    diacom_path = {int(key): value.split('\\')[-2] + '/' + value.split('\\')[-1]  for key, value in diacom_path.items()}
-    with open(r"C:\Users\pps21\Documents\Cornell\data\path_diacom.yaml", 'w') as file:
-        yaml.dump(diacom_path, file)
-
-    ## Compare diacom to previous study
-    with open(r'C:\Users\pps21\Documents\Cornell\HeartTransplant\scan-mask-matches.yaml', 'r') as file:
-        diacom_path_maria = yaml.safe_load(file)
-
-    dict1=diacom_path_maria
-    dict2=diacom_path
-
-    # Get the union of all keys
-    keys = set(dict1.keys()).union(set(dict2.keys()))
-
-    # Create a DataFrame
-    df = pd.DataFrame({
-        'key': list(keys),
-        'value1': [dict1.get(key, np.nan) for key in keys],
-        'value2': [dict2.get(key, np.nan) for key in keys],
-    })
-
-    # Add a flag column
-    df['flag'] = df['value1'] == df['value2']
-    df.columns = ['subject_id', 'prev_study', 'new_study', 'is_equal']
-    df.to_csv(r"C:\Users\pps21\Documents\Cornell\data\compare_diacom_path.csv", index=False)

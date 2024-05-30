@@ -7,6 +7,7 @@ import numpy as np
 import yaml
 import pandas as pd
 import re
+import nrrd
 
 # Define a function to extract the year from the filename
 def extract_year(filename):
@@ -27,7 +28,7 @@ mrb_files = [f for f in os.listdir(source_dir) if f.endswith('.mrb')]
 
 # Init results dictionary
 uids_dict = {}
-index_diacom = {}
+nrrd_sizes = {}
 
 for mrb_file in mrb_files:
     
@@ -47,7 +48,7 @@ for mrb_file in mrb_files:
     # Unzip the .zip file
     with zipfile.ZipFile(os.path.join(dest_dir, zip_file), 'r') as zip_ref:
         zip_ref.extractall(unzip_dir)
-
+        
     # Get the mrml file and convert it to a text file
     mrml_files = [f for f in glob.glob(unzip_dir + '/**/*.mrml', recursive=True)]
     if mrml_files:
@@ -62,6 +63,7 @@ for mrb_file in mrb_files:
 
     # Parse first 60
     if len(uids_dict) < 60:
+        
         # Store all SubjectHierarchy items in a dictionary with their dataNode attribute as the key
         subject_hierarchy_dict = {item.get('dataNode'): item for item in root.iter('SubjectHierarchyItem')}
 
@@ -94,42 +96,51 @@ for mrb_file in mrb_files:
         
     # Parse next 60    
     else:
-        # Store all SubjectHierarchy items with a dataNode that starts with vtkMRMLScalarVolumeNode in a list
-        subject_hierarchy_volumes = [item for item in root.iter('SubjectHierarchyItem') if item.get('dataNode', '').startswith('vtkMRMLScalarVolumeNode')]
         
+        # # Store all SubjectHierarchy items with a dataNode that starts with vtkMRMLScalarVolumeNode in a list
+        subject_hierarchy_volumes = [item for item in root.iter('SubjectHierarchyItem') if item.get('dataNode', '').startswith('vtkMRMLScalarVolumeNode')]
+
         # Find the Segmentation object with id=vtkMRMLSegmentationNode1
         segmentation = next((item for item in root.iter('Segmentation') if item.get('id').startswith('vtkMRMLSegmentationNode')), None)
-        
+
         if segmentation is not None:
             # Get the references attribute
             references = segmentation.get('references')
-        
+
             # Find the referenceImageGeometryRef within the references
             referenceImageGeometryRef = next((ref.split(':')[1] for ref in references.split(';') if ref.startswith('referenceImageGeometryRef:')), None)
-        
+
             if referenceImageGeometryRef is not None:
-                # Find the index of the SubjectHierarchyVolume that matches the referenceImageGeometryRef
-                matching_volume_index = next((i for i, volume in enumerate(subject_hierarchy_volumes) if volume.get('dataNode') == referenceImageGeometryRef), None)
-        
-                if matching_volume_index is not None:
-                    print(f"The index of the matching SubjectHierarchyVolume is: {matching_volume_index}")
-                    index_diacom[subject_id] = matching_volume_index
+                # Find the Volume object with id=referenceImageGeometryRef
+                matching_volume = next((volume for volume in root.iter('Volume') if volume.get('id') == referenceImageGeometryRef), None)
+            
+                if matching_volume is not None:
+                    volume_name = matching_volume.get('name')
+                    print(f"The name of the matching volume is: {volume_name}")
                 else:
-                    print(f"No SubjectHierarchyVolume found with dataNode={referenceImageGeometryRef}.")
+                    print(f"No Volume found with id={referenceImageGeometryRef}.")
             else:
                 print("No referenceImageGeometryRef found in the references.")
         else:
             print("No Segmentation found with id=vtkMRMLSegmentationNode1.")
+        
+        # We cannot parse the mrml file for the second batch because some information were lost
+        # We need to get the number of slices and compare 
+        
+        nrrd_file = [f for f in glob.glob(unzip_dir + '/**/*.nrrd', recursive=True) if volume_name == f.split('\\')[-1].split('.nrrd')[0]][0]
+        
+        data, header = nrrd.read(nrrd_file)
+        nrrd_sizes[subject_id] = data.shape[2]
 
     # Remove the .zip file and unzipped file
     os.remove(os.path.join(dest_dir, zip_file))
     #os.remove(os.path.join(dest_dir, unzip_dir))
-    
-# Fix error
-index_diacom['100188'] = 0
 
 # Find the diacom folders
 input_dir = r"C:\Users\pps21\Documents\Cornell\data\NLST Raw Datasets"
+
+# Bug
+nrrd_sizes['100226'] = 112
 
 patients_cases = glob.glob(input_dir + '/**/**')
 diacom_path = dict()
@@ -151,14 +162,18 @@ for case in patients_cases:
         scan_used = None
         while not scan_used:
             scans = glob.glob(scan_paths[c] + '/**')
-            scan_used = scans[index_diacom[subject_id]]
-            c+=1
+            for scan in scans:
+                # Get the number of files in the scan
+                num_files = len(glob.glob(scan + '/*'))
+                # Check if the number of files matches the size in nrrd_sizes
+                if nrrd_sizes.get(subject_id, 0) == num_files:
+                    scan_used = scan
+                    break
+            c += 1
     diacom_path[subject_id] = scan_used
     
 # Export used DIACOM path
 diacom_path = {int(key): value.split('\\')[-2] + '/' + value.split('\\')[-1]  for key, value in diacom_path.items()}
-with open(r"C:\Users\pps21\Documents\Cornell\data\path_diacom.yaml", 'w') as file:
-    yaml.dump(diacom_path, file)
     
 ## Compare diacom to previous study
 with open(r'C:\Users\pps21\Documents\Cornell\HeartTransplant\scan-mask-matches.yaml', 'r') as file:
@@ -177,8 +192,35 @@ df = pd.DataFrame({
     'value2': [dict2.get(key, np.nan) for key in keys],
 })
 
-# Add a flag column
-df['flag'] = df['value1'] == df['value2']
-df['flag'] = df['flag'].astype(int)
-df.columns = ['subject_id', 'prev_study', 'new_study', 'is_equal']
+df.columns = ['subject_id', 'path_prev', 'path_actual_seg']
 df.to_csv(r"C:\Users\pps21\Documents\Cornell\data\compare_diacom_path.csv", index=False)
+
+
+
+# # Previously used code to scrap second batch (does not work)
+# # Store all SubjectHierarchy items with a dataNode that starts with vtkMRMLScalarVolumeNode in a list
+# subject_hierarchy_volumes = [item for item in root.iter('SubjectHierarchyItem') if item.get('dataNode', '').startswith('vtkMRMLScalarVolumeNode')]
+
+# # Find the Segmentation object with id=vtkMRMLSegmentationNode1
+# segmentation = next((item for item in root.iter('Segmentation') if item.get('id').startswith('vtkMRMLSegmentationNode')), None)
+
+# if segmentation is not None:
+#     # Get the references attribute
+#     references = segmentation.get('references')
+
+#     # Find the referenceImageGeometryRef within the references
+#     referenceImageGeometryRef = next((ref.split(':')[1] for ref in references.split(';') if ref.startswith('referenceImageGeometryRef:')), None)
+
+#     if referenceImageGeometryRef is not None:
+#         # Find the index of the SubjectHierarchyVolume that matches the referenceImageGeometryRef
+#         matching_volume_index = next((i for i, volume in enumerate(subject_hierarchy_volumes) if volume.get('dataNode') == referenceImageGeometryRef), None)
+
+#         if matching_volume_index is not None:
+#             print(f"The index of the matching SubjectHierarchyVolume is: {matching_volume_index}")
+#             index_diacom[subject_id] = matching_volume_index
+#         else:
+#             print(f"No SubjectHierarchyVolume found with dataNode={referenceImageGeometryRef}.")
+#     else:
+#         print("No referenceImageGeometryRef found in the references.")
+# else:
+#     print("No Segmentation found with id=vtkMRMLSegmentationNode1.")

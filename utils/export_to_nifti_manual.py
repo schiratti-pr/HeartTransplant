@@ -5,6 +5,7 @@ import glob
 import nibabel as nib
 import yaml
 import dicom2nifti
+import pandas as pd
 
 
 def get_first_scan(path_patient):
@@ -44,16 +45,23 @@ def covert_HU(image, intercept, slope):
 
 
 if __name__ == '__main__':
+    
+    ###
+    # This script is used to convert the raw DICOM files to NIFTI files.
+    # Using diacom2nifti package or manually converting the Hounsfield units.
+    # Using a list of matches to find the correct scan for each patient
+    ###
+    
     input_dir = r"C:\Users\pps21\Documents\Cornell\data\NLST Raw Datasets"
-    save_dir = r"C:\Users\pps21\Documents\Cornell\data\NLST_nifti_60"
+    save_dir = r"C:\Users\pps21\Documents\Cornell\data\NLST_nifti"
 
-    matches = r"C:\Users\pps21\Documents\Cornell\HeartTransplant\scan-mask-matches.yaml"
+    matches = r"C:\Users\pps21\Documents\Cornell\data\dicom_120.yaml"
     matches_dict = yaml.safe_load(open(matches))
 
     patients_cases = glob.glob(input_dir + '/**/**')
     t = {}
 
-    for case in patients_cases[21:]:
+    for case in patients_cases[:]:
         # Create directory for a patient
         case_id = case.split('\\')[-1]
         t.update({case_id: []})
@@ -67,18 +75,21 @@ if __name__ == '__main__':
         # Pick the correct Hounsfield units
         filtered_scans = []
         
-        # Opens the DIACOM scans and convert directly to NIFTI
-        scan_path_save = path_to_save + '.nii'
-        dicom2nifti.dicom_series_to_nifti(scan_path, scan_path_save, reorient_nifti=True)
+        if True:
+            # Opens the DIACOM scans and convert directly to NIFTI
+            scan_path_save = path_to_save + '.nii'
+            dicom2nifti.dicom_series_to_nifti(scan_path, scan_path_save, reorient_nifti=True)
 
-        # Open the slices and save to NIFTI
-        # sample, intercept, slope = load_sample(scan_path)
-        # array = np.array(sample, dtype=np.float32)
+        # Not used anymore
+        else:
+            # Open the slices and save to NIFTI
+            sample, intercept, slope = load_sample(scan_path)
+            array = np.array(sample, dtype=np.float32)
 
-        # array = covert_HU(array, intercept, slope)
+            array = covert_HU(array, intercept, slope)
 
-        # affine = np.eye(4)
-        # nifti_file = nib.Nifti1Image(array, affine)
+            affine = np.eye(4)
+            nifti_file = nib.Nifti1Image(array, affine)
 
-        # scan_path_save = path_to_save + '.nii'
-        # nib.save(nifti_file, scan_path_save)
+            scan_path_save = path_to_save + '.nii'
+            nib.save(nifti_file, scan_path_save)
