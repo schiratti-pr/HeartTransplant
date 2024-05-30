@@ -1,11 +1,11 @@
 gpus: [0]
 
 data:
-  raw_directory: 'C:/Users/pps21/Documents/Cornell/data/NLST_nifti_60/'
-  annotations_dir: 'C:/Users/pps21/Box/NLST Chest CT/Annotations - VT/'
-  data_splits: 'C:/Users/pps21/Documents/Cornell/data/nnUNet-train_val-split.csv'
-  batch_size_per_gpu: 2
-  dataloader_workers_per_gpu: 1
+  raw_directory: '/home/prs247/data/NLST_nifti/'
+  annotations_dir: '/home/prs247/data/Annotations - VT/'
+  data_splits: '/home/prs247/data/NLST-train_val_test-split-120.csv'
+  batch_size_per_gpu: 1
+  dataloader_workers_per_gpu: 16
   target_size: [ 256, 256, 256]
   num_classes: 1
 #  crop_heart: False
@@ -19,7 +19,7 @@ model:
   name: 'UNet'
 
 train:
-  epochs: 200
+  epochs: 100
   grad_clip: 10.0
   precision: 32
   lr: 1.0e-4

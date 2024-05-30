@@ -133,8 +133,8 @@ class NLSTTrainingModule(LightningModule):
         dice_coeff = binary_dice_coefficient(class_pred, y)
 
         # log values
-        self.log('Train/DiceCoeff', dice_coeff)
-        self.log('Train/Loss', loss)
+        self.log('Train/DiceCoeff', dice_coeff, prog_bar=True)
+        self.log('Train/Loss', loss, prog_bar=True)
 
         return {'loss': loss, 'dice': dice_coeff}
 
@@ -150,8 +150,8 @@ class NLSTTrainingModule(LightningModule):
 
         # metric
         dice_coeff = binary_dice_coefficient(class_pred, y)
-        self.log('Val/DiceCoeff', dice_coeff)
-        self.log('Val/Loss', loss)
+        self.log('Val/DiceCoeff', dice_coeff, prog_bar=True)
+        self.log('Val/Loss', loss, prog_bar=True)
 
         if batch_idx % 200:
             # Get tensorboard logger

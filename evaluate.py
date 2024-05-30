@@ -114,12 +114,13 @@ def main():
 
     parser = argparse.ArgumentParser(description='Processing configuration for training')
     parser.add_argument('--exp_path', type=str, help='path to experiment path',
-                        default='/home/mdo4009/transplant-rejection/logs/UNet-2D/UNet__2022-12-03-11-37-40/')
-    parser.add_argument('--save_fig', type=bool, help='save prediction figure', default=False)
-    parser.add_argument('--device', type=str, default='cuda:1')
-    parser.add_argument('--data_split', type=str, default='val')
+                        default=r't/best_nnUNet_split/UNet__2024-05-23-20-31-24')
+    parser.add_argument('--save_fig', type=bool, help='save prediction figure', default=True)
+    parser.add_argument('--device', type=str, default='cpu') # 'cuda:1' # 'cpu'
+    parser.add_argument('--data_split', type=str, default='test')
     parser.add_argument('--tta', type=bool, help='run with tta', default=False)
-    parser.add_argument('--result_save', type=str, help='path to folder', default='results')
+    parser.add_argument('--result_save', type=str, help='path to folder', default='../results')
+    parser.add_argument('--data_split_path', type=str, help='path to splits csv', default='../../data//NLST-train_val_test-split-120.csv')
 
     args = parser.parse_args()
 
@@ -142,14 +143,12 @@ def main():
                 data_dict.update({raw_sample: label_path})
 
     # Data split
-    # splits = pd.read_csv(config['data']['data_splits'])
-    splits = pd.read_csv('~/nnUNet-test-split.csv')
-    splits['split'] = 'test'
+    splits = pd.read_csv(args.data_split_path)
 
     data_dict_split = {}
     for index, row in splits.iterrows():
         patient_id = row['id']
-        split = row['split'] # set
+        split = row['set'] # split
 
         for key in data_dict.keys():
             if str(patient_id) in key and split == args.data_split:
@@ -237,7 +236,9 @@ def main():
             output_pred[81:337, 158:430] = class_pred[81:337, 158:430]
             class_pred = torch.tensor(output_pred)
         elif config['data']['target_size'][0] == 256:
-            output_pred[40:168, 79:215, :] = class_pred[40:168, 79:215, :]
+            # output_pred[40:168, 79:215, :] = class_pred[40:168, 79:215, :]
+            print('In heart zone filtering!')
+            output_pred[79:215, 40:168, :] = class_pred[79:215, 40:168, :]
             class_pred = torch.tensor(output_pred)
         elif config['data']['target_size'][0] == 128:
             output_pred[20:84, 39:107, ] = class_pred[20:84, 39:107, :]

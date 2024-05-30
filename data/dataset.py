@@ -252,15 +252,11 @@ class NLST_NIFTI_Dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx) -> Dict[str, Any]:
         patient_path, label_path = list(self.patients_paths.items())[idx]
         patient_id = patient_path.split('/')[-1][:-4]
-        # patient_id = patient_path.split('\\')[-1][:6]
         roi = nib.load(patient_path).get_fdata()
 
         roi = array_to_tensor(roi)
         label = nib.load(label_path).get_fdata()
         original_z = label.shape[-1]
-        if int(patient_id) not in [100108, 100085, 100088, 100092, 100019, 100031, 100046, 100053, 100072, 100081]:
-            label = np.flip(label, -1).copy()
-        label = np.transpose(label, [1, 0, 2])
 
         mask = torch.Tensor(label)
 

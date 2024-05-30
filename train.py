@@ -10,10 +10,13 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.lr_monitor import LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
+# from pytorch_lightning.accelerators import find_usable_cuda_devices
 
 from data.dataloader import NLSTDataModule
 from models import NLSTTrainingModule
 
+import torch
+torch.cuda.memory_summary(device=None, abbreviated=False)
 
 def main():
     parser = argparse.ArgumentParser(description='Processing configuration for training')
@@ -31,9 +34,8 @@ def main():
 
     data_dict = {}
     for raw_sample in glob.glob(raw_directory + '**'):
-        # sample_id = raw_sample.split('/')[-1][:-4]
         if '.nii' in raw_sample:
-            sample_id = raw_sample.split('\\')[-1][:-4]
+            sample_id = raw_sample.split('/')[-1][:-4]
             for label_path in glob.glob(annotations_dir + '**'):
                 if sample_id in label_path and '.nii' in label_path and all(sample_id not in key for key in data_dict.keys()):
                     data_dict.update({raw_sample:label_path})
@@ -44,12 +46,12 @@ def main():
     data_dict_train, data_dict_val = {}, {}
     for index, row in splits.iterrows():
         patient_id = row['id']
-        split = row['split'] #set
+        split = row['set'] #set
 
         for key in data_dict.keys():
             if str(patient_id) in key and split == 'train':
                 data_dict_train.update({key: data_dict[key]})
-            if str(patient_id) in key and split == 'val' and str(patient_id) != '100092':
+            if str(patient_id) in key and split == 'val':
                 data_dict_val.update({key: data_dict[key]})
 
     print('Train:', len(data_dict_train), 'Val:', len(data_dict_val))
@@ -97,19 +99,20 @@ def main():
         every_n_epochs=1,
         save_top_k=3,
         mode='min',
-        monitor='val_epoch/loss',
+        monitor='Val/Loss',
         auto_insert_metric_name=True
     )
     lr_monitor = LearningRateMonitor()
-    early_stop_callback = EarlyStopping(monitor="val_epoch/loss", min_delta=0.0, patience=10, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="Val/Loss", min_delta=0.0, patience=10, verbose=False, mode="min")
     callbacks = [checkpoint_callback, lr_monitor, early_stop_callback]
 
     tb_logger = TensorBoardLogger(config['logging']['root_path'], config['logging']['name'], version=experiment_name)
 
     trainer = pl.Trainer(
-        # gpus=config.get('gpus'),
+        gpus=config.get('gpus'),
         max_epochs=config['train']['epochs'],
-        accelerator="cuda", # "cuda"
+        accelerator="gpu", # "cuda" "gpu"
+        # devices=find_usable_cuda_devices(1),
         gradient_clip_val=config['train'].get('grad_clip', 0),
         log_every_n_steps=config['logging']['train_logs_steps'],
         num_sanity_val_steps=0,
