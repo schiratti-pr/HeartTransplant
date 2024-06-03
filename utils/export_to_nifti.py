@@ -106,7 +106,7 @@ if __name__ == '__main__':
         if True:
             # Opens the DIACOM scans and convert directly to NIFTI
             scan_path_save = path_to_save + '.nii'
-            dicom2nifti.dicom_series_to_nifti(chosen_scan, scan_path_save, reorient_nifti=True)
+            dicom2nifti.dicom_series_to_nifti(chosen_scan, scan_path_save, reorient_nifti=False)
 
         else:
             # Open the scans and save to NIFTI (from intermediary array)

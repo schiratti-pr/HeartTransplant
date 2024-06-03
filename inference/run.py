@@ -35,7 +35,6 @@ def showPredictionContour(img, pred, slice_id):
     return fig
 
 
-
 def main():
     SEED = 0
     cudnn.benchmark = True
@@ -50,21 +49,22 @@ def main():
     parser.add_argument('--device', type=str, default='cpu')
     parser.add_argument('--result_save', type=str, help='path to folder', default='inference_results')
 
-    args = parser.parse_args()
+    # args = parser.parse_args()
+    args, unknown = parser.parse_known_args() # solution for jupyter run
 
     device = torch.device(args.device)
 
     # Prepare data
     data_sample, raw_sample = preprocess(args.scan_path)
-    data_sample = np.swapaxes(data_sample, 2, -1).squeeze()
-    data_sample = np.transpose(data_sample, [1, 0, 2]).unsqueeze(0).unsqueeze(0)
+    # data_sample = np.swapaxes(data_sample, 2, -1).squeeze()
+    # data_sample = np.transpose(data_sample, [1, 0, 2]).unsqueeze(0).unsqueeze(0)
 
     # Init model
     model = get_model(spatial_dims=3, num_in_channels=1)
     model.to(device)
 
     # Load weights
-    checkpoint_path = 'weights/best_3d_model.ckpt'
+    checkpoint_path = '../results/best_unet.ckpt'
     state_dict = torch.load(str(checkpoint_path), map_location=device)['state_dict']
     for key in list(state_dict.keys()):
         state_dict[key.replace('net.', '')] = state_dict.pop(key)
@@ -78,7 +78,8 @@ def main():
 
     # Filtering out everything beyond the pre-calculated heart zone
     output_pred = np.zeros(class_pred.shape)
-    output_pred[40:168, 79:215, :] = class_pred[40:168, 79:215, :]
+    # output_pred[40:168, 79:215, :] = class_pred[40:168, 79:215, :]
+    output_pred[79:215, 40:168, :] = class_pred[79:215, 40:168, :]
     class_pred = torch.tensor(output_pred)
 
     # CCA
@@ -97,12 +98,12 @@ def main():
     if not os.path.exists(args.result_save):
         os.makedirs(args.result_save)
 
-    # # Save Volume to NIFTI file
-    # nifti_file = nib.Nifti1Image(class_pred.numpy(), np.eye(4))
-    # name_file = args.scan_path.split('/')[-1].split('.')[0] + 'pred'
-    # scan_path_save = os.path.join(args.result_save,  name_file)
-    # nib.save(nifti_file, scan_path_save)
-    # print('Result saved to: {}.nii'.format(scan_path_save))
+    # Save Volume to NIFTI file
+    nifti_file = nib.Nifti1Image(class_pred.numpy(), np.eye(4))
+    name_file = args.scan_path.split('/')[-1].split('.')[0] + 'pred'
+    scan_path_save = os.path.join(args.result_save,  name_file)
+    nib.save(nifti_file, scan_path_save)
+    print('Result saved to: {}.nii'.format(scan_path_save))
 
     # Save Volume prediction
     num_slices, scan1, z_spacing = load_sample_more_details(args.scan_path)

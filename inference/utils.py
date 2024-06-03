@@ -5,6 +5,9 @@ import glob
 import pydicom as dicom
 import numpy as np
 
+import os
+import dicom2nifti
+
 import nibabel as nib
 from monai.transforms import (
     EnsureChannelFirst,
@@ -54,6 +57,16 @@ def get_pixels_hu(scans):
     return np.array(image, dtype=np.int16)
 
 
+def load_dicom(scan_path):
+    
+    scan_path_save = scan_path + '/scan_temp.nii'
+    dicom2nifti.dicom_series_to_nifti(scan_path, scan_path_save, reorient_nifti=False)
+    nifti_data = nib.load(scan_path_save).get_fdata()
+    os.remove(scan_path_save)
+    
+    return nifti_data
+
+
 def load_sample(exam_path):
     slices_exam = glob.glob(exam_path + '/**')
     d = {sl_exam: int(sl_exam.split('/')[-1].split('-')[-1][:-4]) for sl_exam in slices_exam}
@@ -87,7 +100,8 @@ def load_sample_more_details(exam_path):
 
 def preprocess(path_to_scan):
     # roi = nib.load(path_to_scan).get_fdata()
-    orig_roi = load_sample(path_to_scan)
+    # orig_roi = load_sample(path_to_scan)
+    orig_roi = load_dicom(path_to_scan)
 
     roi = array_to_tensor(orig_roi)
     # Transform to 3D cube roi with same size for all dimensions
